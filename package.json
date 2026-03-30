@@ -1,0 +1,32 @@
+{
+  "name": "platzbelegung",
+  "version": "1.0.0",
+  "description": "Durchsucht online Quellen (vorrangig fussball.de) nach Spielen auf einem oder mehreren bestimmten Sportplätzen, und stellt die Platzbelegung übersichtlich dar.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "jest --testEnvironment node"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MNLBCK/Platzbelegung.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/MNLBCK/Platzbelegung/issues"
+  },
+  "homepage": "https://github.com/MNLBCK/Platzbelegung#readme",
+  "dependencies": {
+    "axios": "^1.13.5",
+    "cheerio": "^1.2.0",
+    "express": "^5.2.1",
+    "node-cache": "^5.1.2"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2"
+  }
+}
