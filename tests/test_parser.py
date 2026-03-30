@@ -167,3 +167,86 @@ class TestGroupByDate:
         grouped = group_by_date(slots)
         assert len(grouped[date(2026, 3, 15)]) == 2
         assert len(grouped[date(2026, 3, 22)]) == 1
+
+
+class TestScrapedGamesToOccupancy:
+    def test_creates_slot_from_scraped_game(self):
+        from platzbelegung.models import ScrapedGame
+        from platzbelegung.parser import scraped_games_to_occupancy
+
+        game = ScrapedGame(
+            venue_id="V1",
+            venue_name="Platz 1",
+            date="28.03.2026",
+            time="14:00",
+            home_team="SKV Hochberg",
+            guest_team="FC Muster",
+            competition="Kreisliga A",
+            start_date="2026-03-28T14:00:00",
+            scraped_at="2026-03-30T09:00:00Z",
+        )
+        slots = scraped_games_to_occupancy([game], preparation_buffer_minutes=15, default_duration_minutes=90)
+        assert len(slots) == 1
+        s = slots[0]
+        assert s.date == date(2026, 3, 28)
+        assert s.start_time == time(13, 45)  # 14:00 - 15min
+        assert s.end_time == time(15, 30)    # 14:00 + 90min
+        assert s.team_name == "SKV Hochberg"
+        assert s.opponent == "FC Muster"
+        assert s.league == "Kreisliga A"
+
+    def test_duration_from_competition_name(self):
+        from platzbelegung.models import ScrapedGame
+        from platzbelegung.parser import scraped_games_to_occupancy
+
+        game = ScrapedGame(
+            venue_id="V1",
+            venue_name="Platz",
+            date="01.04.2026",
+            time="10:00",
+            home_team="TSV",
+            guest_team="VfB",
+            competition="B-Junioren Kreisliga",
+            start_date="2026-04-01T10:00:00",
+            scraped_at="",
+        )
+        slots = scraped_games_to_occupancy(
+            [game],
+            preparation_buffer_minutes=15,
+            default_duration_minutes=90,
+            game_durations={"B-Junioren": 70},
+        )
+        assert len(slots) == 1
+        # Duration should be 70 min
+        assert slots[0].end_time == time(11, 10)  # 10:00 + 70min
+
+    def test_invalid_start_date_skipped(self):
+        from platzbelegung.models import ScrapedGame
+        from platzbelegung.parser import scraped_games_to_occupancy
+
+        game = ScrapedGame(
+            venue_id="V1", venue_name="X", date="", time="",
+            home_team="A", guest_team="B", competition="Liga",
+            start_date="not-a-date", scraped_at="",
+        )
+        slots = scraped_games_to_occupancy([game])
+        assert slots == []
+
+    def test_results_sorted_by_date_and_time(self):
+        from platzbelegung.models import ScrapedGame
+        from platzbelegung.parser import scraped_games_to_occupancy
+
+        games = [
+            ScrapedGame(
+                venue_id="V1", venue_name="P", date="05.04.2026", time="14:00",
+                home_team="A", guest_team="B", competition="Liga",
+                start_date="2026-04-05T14:00:00", scraped_at="",
+            ),
+            ScrapedGame(
+                venue_id="V1", venue_name="P", date="01.04.2026", time="10:00",
+                home_team="C", guest_team="D", competition="Liga",
+                start_date="2026-04-01T10:00:00", scraped_at="",
+            ),
+        ]
+        slots = scraped_games_to_occupancy(games)
+        assert slots[0].date < slots[1].date

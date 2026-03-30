@@ -5,6 +5,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const cache = new NodeCache({ stdTTL: 300 }); // 5 min cache
@@ -13,6 +14,8 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const FUSSBALL_DE_BASE = 'https://www.fussball.de';
+const DATA_DIR = path.join(__dirname, 'data');
+const LATEST_SNAPSHOT = path.join(DATA_DIR, 'latest.json');
 
 const HTTP_HEADERS = {
   'User-Agent':
@@ -22,6 +25,23 @@ const HTTP_HEADERS = {
   'Accept-Encoding': 'gzip, deflate, br',
   Connection: 'keep-alive',
 };
+
+/**
+ * Load the latest JSON snapshot written by the Python scraper.
+ * Returns null when no snapshot exists yet.
+ * @returns {object|null}
+ */
+function loadLatestSnapshot() {
+  try {
+    const raw = fs.readFileSync(LATEST_SNAPSHOT, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error('Error reading snapshot:', err.message);
+    }
+    return null;
+  }
+}
 
 /**
  * Parse a German date/time string from fussball.de
@@ -48,100 +68,9 @@ function parseGermanDate(dateStr, timeStr) {
 }
 
 /**
- * Scrape games for a venue from fussball.de
- * @param {string} venueId - fussball.de venue (Sportstätte) ID
- * @returns {Promise<Array>} Array of game objects
- */
-async function scrapeVenueGames(venueId) {
-  const cacheKey = `venue_${venueId}`;
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-
-  const url = `${FUSSBALL_DE_BASE}/sportstaette/-/id/${encodeURIComponent(venueId)}`;
-
-  const response = await axios.get(url, {
-    headers: HTTP_HEADERS,
-    timeout: 15000,
-    maxContentLength: 10 * 1024 * 1024, // 10 MB limit
-  });
-
-  const $ = cheerio.load(response.data);
-  const games = [];
-
-  // Extract venue name from the page title/header
-  const venueName =
-    $('h1.headline').first().text().trim() ||
-    $('h2.headline').first().text().trim() ||
-    $('title').text().replace(/fussball\.de/g, '').replace(/\|/g, '').trim() ||
-    `Platz ${venueId}`;
-
-  // fussball.de renders game rows in tables with class "table-thead-row" for headers
-  // and individual game rows
-  $('table.table-striped tbody tr, .result-set-row').each((_, row) => {
-    const cells = $(row).find('td');
-    if (cells.length < 4) return;
-
-    const dateText = $(cells[0]).text().trim();
-    const timeText = $(cells[1]).text().trim();
-    const homeTeam = $(cells[2]).text().trim();
-    const guestTeam = $(cells[4]).text().trim();
-    const competition = $(cells[5]).text().trim();
-
-    if (!dateText || !homeTeam) return;
-
-    const startDate = parseGermanDate(dateText, timeText);
-    if (!startDate) return;
-
-    games.push({
-      venueId,
-      venueName,
-      date: dateText,
-      time: timeText,
-      homeTeam,
-      guestTeam,
-      competition,
-      startDate: startDate.toISOString(),
-    });
-  });
-
-  // Alternative selector for different page layouts
-  if (games.length === 0) {
-    $('.fixture-list-item, .match-row, .game-row').each((_, item) => {
-      const dateText =
-        $(item).find('.date, .match-date').text().trim();
-      const timeText =
-        $(item).find('.time, .match-time').text().trim();
-      const homeTeam =
-        $(item).find('.home-team, .team-home').text().trim();
-      const guestTeam =
-        $(item).find('.guest-team, .team-guest').text().trim();
-      const competition =
-        $(item).find('.competition, .league').text().trim();
-
-      if (!dateText || !homeTeam) return;
-
-      const startDate = parseGermanDate(dateText, timeText);
-      if (!startDate) return;
-
-      games.push({
-        venueId,
-        venueName,
-        date: dateText,
-        time: timeText,
-        homeTeam,
-        guestTeam,
-        competition,
-        startDate: startDate.toISOString(),
-      });
-    });
-  }
-
-  cache.set(cacheKey, games);
-  return games;
-}
-
-/**
- * Search fussball.de for venues by name
+ * Search fussball.de for venues by name (used by the venue discovery UI).
+ * This search is lightweight and does not duplicate the Python scraper's
+ * data-collection role.
  * @param {string} query - search term
  * @returns {Promise<Array>} Array of venue objects {id, name, location}
  */
@@ -155,20 +84,18 @@ async function searchVenues(query) {
   const response = await axios.get(url, {
     headers: HTTP_HEADERS,
     timeout: 15000,
-    maxContentLength: 5 * 1024 * 1024, // 5 MB limit
+    maxContentLength: 5 * 1024 * 1024,
   });
 
   const $ = cheerio.load(response.data);
   const venues = [];
 
-  // Parse search results
   $('.search-result-item, .result-item').each((_, item) => {
     const link = $(item).find('a').first();
     const href = link.attr('href') || '';
     const name = link.text().trim() || $(item).find('.title').text().trim();
     const location = $(item).find('.location, .subtitle').text().trim();
 
-    // Extract ID from URL pattern /sportstaette/-/id/XXXXX
     const idMatch = href.match(/\/id\/([^/]+)/);
     if (!idMatch || !name) return;
 
@@ -187,10 +114,26 @@ async function searchVenues(query) {
 // --- API Routes ---
 
 /**
- * GET /api/games?venueId=XXXXX[&venueId=YYYYY]
- * Returns games for one or more venues
+ * GET /api/snapshot
+ * Returns the full latest JSON snapshot (written by the Python scraper).
+ * Includes metadata (generated_at, config) and the games array.
  */
-app.get('/api/games', async (req, res) => {
+app.get('/api/snapshot', (_req, res) => {
+  const snapshot = loadLatestSnapshot();
+  if (!snapshot) {
+    return res.status(404).json({
+      error: 'Kein Snapshot vorhanden. Bitte zuerst "platzbelegung scrape" ausführen.',
+    });
+  }
+  res.json(snapshot);
+});
+
+/**
+ * GET /api/games?venueId=XXXXX[&venueId=YYYYY]
+ * Returns games for one or more venues from the latest snapshot.
+ * Requires at least one venueId parameter.
+ */
+app.get('/api/games', (req, res) => {
   let venueIds = req.query.venueId;
   if (!venueIds) {
     return res.status(400).json({ error: 'venueId parameter required' });
@@ -198,6 +141,7 @@ app.get('/api/games', async (req, res) => {
   if (!Array.isArray(venueIds)) {
     venueIds = [venueIds];
   }
+
   // Validate venue IDs: only allow alphanumeric, dashes and underscores
   const validId = /^[A-Za-z0-9_-]+$/;
   const invalidIds = venueIds.filter((id) => !validId.test(id));
@@ -205,21 +149,22 @@ app.get('/api/games', async (req, res) => {
     return res.status(400).json({ error: 'Invalid venue ID format' });
   }
 
-  try {
-    const results = await Promise.all(
-      venueIds.map((id) => scrapeVenueGames(id))
-    );
-    const allGames = results.flat();
-    res.json(allGames);
-  } catch (err) {
-    console.error('Error scraping games:', err.message);
-    res.status(502).json({ error: 'Fehler beim Abrufen der Spieldaten' });
+  const snapshot = loadLatestSnapshot();
+  if (!snapshot) {
+    return res.status(404).json({
+      error: 'Kein Snapshot vorhanden. Bitte zuerst "platzbelegung scrape" ausführen.',
+    });
   }
+
+  const allGames = snapshot.games || [];
+  const filtered = allGames.filter((g) => venueIds.includes(g.venueId));
+  res.json(filtered);
 });
 
 /**
  * GET /api/search?q=Sportplatzname
- * Searches fussball.de for venues matching the query
+ * Searches fussball.de for venues matching the query.
+ * Used by the UI for venue discovery / adding new venues.
  */
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
@@ -238,7 +183,7 @@ app.get('/api/search', async (req, res) => {
 
 /**
  * GET /api/demo
- * Returns demo data for testing the UI
+ * Returns demo data for testing the UI without a snapshot.
  */
 app.get('/api/demo', (_req, res) => {
   const today = new Date();

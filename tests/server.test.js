@@ -44,6 +44,25 @@ describe('GET /api/games', () => {
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty('error');
   });
+
+  it('returns 404 when no snapshot exists (valid venueId)', async () => {
+    // No data/latest.json present in the test environment
+    const res = await request(app).get('/api/games?venueId=SOME_VALID_ID');
+    // Either 404 (no snapshot) or 200 (snapshot exists) – must not be 400/500
+    expect([200, 404]).toContain(res.status);
+    if (res.status === 404) {
+      expect(res.body).toHaveProperty('error');
+    }
+  });
+});
+
+describe('GET /api/snapshot', () => {
+  it('returns 404 when no snapshot exists', async () => {
+    const res = await request(app).get('/api/snapshot');
+    // No data/latest.json in test env
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
 });
 
 describe('GET /api/search', () => {

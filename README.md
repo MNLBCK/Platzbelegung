@@ -1,124 +1,227 @@
 # Platzbelegung
 
-Durchsucht online Quellen (vorrangig fussball.de) nach Spielen auf einem oder mehreren bestimmten Sportplätzen, und stellt die Platzbelegung übersichtlich dar.
+Durchsucht online Quellen (vorrangig fussball.de) nach Spielen auf einem oder mehreren bestimmten Sportplätzen und stellt die Platzbelegung übersichtlich dar.
 
-## Projektbeschreibung
+## Architektur
 
-**Platzbelegung** liest Spielplandaten von [fussball.de](https://www.fussball.de) über eine lokale REST-API aus und stellt die Belegung aller Sportstätten eines Vereins übersichtlich im Terminal dar.
+Das Projekt ist in zwei klar getrennte Schichten unterteilt:
 
-Ein Verein kann **mehrere Mannschaften** (Herren, A-Jugend, B-Jugend, …) haben und diese können **mehrere Sportstätten** (Kunstrasenplatz, Rasenplatz, Bezirkssportanlage, …) nutzen.  
-Die Belegungsübersicht zeigt für jede Sportstätte, an welchen Tagen welche Mannschaft spielt – inklusive Auf- und Abbauzeit (15 Minuten Puffer vor dem Anstoß).
+```
+config.yaml               ← zentrale Konfiguration (Verein, Plätze, Saison, …)
+│
+├── Python-Paket (src/platzbelegung/)
+│   ├── scraper.py        ← liest Daten direkt von fussball.de
+│   ├── storage.py        ← speichert Snapshots als JSON mit Zeitstempel
+│   ├── parser.py         ← wandelt Rohdaten in Belegungsslots um
+│   ├── render_html.py    ← erzeugt offline-fähige HTML-Datei
+│   ├── display.py        ← Terminal-Ausgabe (rich)
+│   └── templates/
+│       └── occupancy.html.j2   ← gemeinsame Jinja2-Vorlage
+│
+└── Web-Server (server.js / Express)
+    └── liest data/latest.json  ← von Python erzeugt
+        ├── GET /api/snapshot   ← vollständiger Snapshot
+        ├── GET /api/games      ← Spiele gefiltert nach Sportstätte
+        ├── GET /api/search     ← Sportstätten-Suche auf fussball.de
+        └── GET /api/demo       ← Demo-Daten ohne Snapshot
+```
+
+**Datenfluss:**
+1. `platzbelegung scrape` → scrapt fussball.de → speichert `data/latest.json` + `data/snapshots/*.json`
+2. `platzbelegung html` → liest `data/latest.json` → generiert `data/latest.html`
+3. Express-Server → liest `data/latest.json` → liefert dynamische Web-UI
 
 ## Voraussetzungen
 
 - Python 3.10 oder neuer
-- Eine laufende Instanz der [fussball.de REST API von iste2](https://github.com/iste2/Fu-ball.de-REST-API)
-  - Standardmäßig wird `http://localhost:5000` erwartet
+- Node.js 18 oder neuer (nur für den Web-Server)
 
-## Installation
+## Python-Installation
 
 ```bash
-# Abhängigkeiten installieren (im Editable-Modus)
+# Abhängigkeiten installieren (im Editable-Modus mit Dev-Extras)
 pip install -e ".[dev]"
-```
-
-## Nutzung
-
-```bash
-# Standardkonfiguration (SKV Hochberg, aktuelle Saison)
-platzbelegung
-
-# Eigene Vereins-ID und API-URL
-platzbelegung --club-id 00ES8GNAVO00000PVV0AG08LVUPGND5I --api-url http://localhost:5000
-
-# Andere Saison
-platzbelegung --season 2425
-
-# Detaillierte Ausgabe
-platzbelegung --verbose
 ```
 
 ## Konfiguration
 
-Die Standardkonfiguration befindet sich in `src/platzbelegung/config.py`:
+Alle Einstellungen werden in `config.yaml` im Repo-Root verwaltet.
 
-| Variable        | Beschreibung                         | Standard                           |
-|-----------------|--------------------------------------|------------------------------------|
-| `CLUB_ID`       | Vereins-ID aus der fussball.de-URL   | `00ES8GNAVO00000PVV0AG08LVUPGND5I` |
-| `API_BASE_URL`  | Basis-URL der REST API               | `http://localhost:5000`            |
-| `SEASON`        | Saison-Code (z.B. `2526` = 2025/26)  | `2526`                             |
+### Wichtige Felder
 
-Der abgefragte Zeitraum umfasst dynamisch den **aktuellen Monat** sowie den **Monat, der in 3 Wochen liegt** (kann der gleiche oder der nächste Monat sein).
+```yaml
+club:
+  id: "00ES8GNAVO00000PVV0AG08LVUPGND5I"   # Vereins-ID aus fussball.de-URL
+  name: "SKV Hochberg"
+
+season: "2526"   # Saison-Code (2025/26 → "2526")
+
+venues:           # Zu überwachende Sportstätten
+  - id: "BEISPIEL_ID"
+    name: "Kunstrasenplatz"
+
+date_range:
+  mode: "auto"    # oder "manual" mit start/end
+
+scraper:
+  preparation_buffer_minutes: 15   # Puffer vor Anpfiff
+  game_durations:
+    Herren: 90
+    "A-Junioren": 70
+    # …
+
+output:
+  data_dir: "data"
+  html_file: "data/latest.html"
+```
+
+Die Sportstätten-ID findet sich in der fussball.de-URL:
+```
+https://www.fussball.de/sportstaette/-/id/<ID>
+```
+
+Alternativ kann die Web-UI verwendet werden (Suche unter `/`) oder die Suche in der API (`/api/search?q=Name`), um IDs zu ermitteln.
+
+## Lokaler Workflow (Python-only)
+
+```bash
+# 1. Daten scrapen und Snapshot speichern
+platzbelegung scrape
+
+# 2a. Platzbelegung im Terminal anzeigen
+platzbelegung show
+
+# 2b. Statische HTML-Datei generieren (offline-fähig)
+platzbelegung html
+# → data/latest.html
+
+# Eigene HTML-Ausgabedatei
+platzbelegung html --output /tmp/belegung.html
+
+# Sportstätten direkt per CLI angeben (überschreibt config.yaml)
+platzbelegung scrape --venue-id ID1 ID2
+```
+
+## Web-Server (Node.js)
+
+Der Express-Server liest `data/latest.json`, das von `platzbelegung scrape` erzeugt wurde.
+
+```bash
+npm install
+npm start
+# → http://localhost:3000
+```
+
+### API-Endpunkte
+
+| Endpunkt | Beschreibung |
+|---|---|
+| `GET /` | Web-UI (public/index.html) |
+| `GET /api/snapshot` | Vollständiger aktuellster Snapshot (JSON) |
+| `GET /api/games?venueId=ID` | Spiele einer oder mehrerer Sportstätten |
+| `GET /api/search?q=Name` | Sportstätten auf fussball.de suchen |
+| `GET /api/demo` | Demo-Daten (kein Snapshot erforderlich) |
+
+### Deployment
+
+Für ein Hosting auf einem Webserver (z.B. Render, Railway, Fly.io, VPS):
+1. Repo deployen
+2. `npm install` ausführen
+3. Sicherstellen, dass `data/latest.json` vorhanden ist (z.B. per Cronjob via Python-Scraper) oder den Scraper separat deployen
+4. `npm start` (oder via PM2/systemd)
 
 ## Projektstruktur
 
 ```
 Platzbelegung/
-├── README.md                    # Diese Datei
-├── pyproject.toml               # Projektdefinition und Abhängigkeiten
+├── config.yaml                        # Zentrale Konfiguration
+├── README.md
+├── pyproject.toml                     # Python-Paketdefinition
+├── package.json                       # Node.js-Abhängigkeiten
+├── server.js                          # Express-Web-Server
+├── public/                            # Statisches Frontend (Web-UI)
+│   ├── index.html
+│   ├── app.js
+│   └── style.css
 ├── src/
 │   └── platzbelegung/
 │       ├── __init__.py
-│       ├── main.py              # CLI-Einstiegspunkt
-│       ├── config.py            # Konfiguration
-│       ├── models.py            # Datenmodelle: Team, Game, Venue, OccupancySlot
-│       ├── api_client.py        # HTTP-Client für die fussball.de REST API
-│       ├── parser.py            # Logik: Spiele → Platzbelegung
-│       └── display.py           # Tabellarische Ausgabe (rich)
+│       ├── config.py                  # Lädt config.yaml, Legacy-Konstanten
+│       ├── scraper.py                 # Direkter fussball.de HTML-Scraper
+│       ├── storage.py                 # JSON-Snapshot-Verwaltung
+│       ├── models.py                  # Datenmodelle (ScrapedGame, OccupancySlot, …)
+│       ├── parser.py                  # Spiele → Belegungsslots
+│       ├── render_html.py             # Jinja2-HTML-Generierung
+│       ├── display.py                 # Terminal-Ausgabe (rich)
+│       ├── main.py                    # CLI-Einstiegspunkt
+│       ├── api_client.py              # Legacy: iste2 REST-API-Client
+│       └── templates/
+│           └── occupancy.html.j2      # Geteilte HTML-Vorlage
+├── data/                              # Gitignoriert – generierte Daten
+│   ├── latest.json                    # Aktuellster Snapshot
+│   ├── latest.html                    # Generierte HTML-Datei
+│   └── snapshots/                     # Archiv aller Snapshots
+│       └── 2026-03-30T10-00-00-000000Z.json
 └── tests/
-    ├── __init__.py
-    ├── test_api_client.py
+    ├── test_scraper.py
+    ├── test_storage.py
+    ├── test_render_html.py
     ├── test_parser.py
-    └── test_display.py
-```
-
-## Architektur
-
-```
-CLI (main.py)
-    │
-    ├── FussballDeApiClient (api_client.py)
-    │       └── fussball.de REST API  [extern]
-    │
-    ├── games_to_occupancy (parser.py)
-    │       ├── extract_venue()
-    │       ├── group_by_venue()
-    │       └── group_by_date()
-    │
-    └── display_occupancy (display.py)
-            └── rich Terminal-Tabellen
+    ├── test_display.py
+    ├── test_api_client.py
+    └── server.test.js
 ```
 
 ## Tests
 
 ```bash
+# Python
 pytest
+
+# Node.js
+npm test
 ```
 
-## Datenquelle
+## Snapshot-Format
 
-Die Daten werden über die Open-Source REST API
-[iste2/Fu-ball.de-REST-API](https://github.com/iste2/Fu-ball.de-REST-API)
-abgerufen, die fussball.de scrapt. Diese muss lokal laufen und unter der
-konfigurierten `API_BASE_URL` erreichbar sein.
+`data/latest.json` hat folgendes Format:
 
-## Beispiel-Ausgabe
-
+```json
+{
+  "generated_at": "2026-03-30T10:00:00Z",
+  "config": {
+    "club_id": "00ES8GNAVO00000PVV0AG08LVUPGND5I",
+    "club_name": "SKV Hochberg",
+    "season": "2526",
+    "venues": ["VENUE_ID"]
+  },
+  "games": [
+    {
+      "venueId": "VENUE_ID",
+      "venueName": "Kunstrasenplatz",
+      "date": "28.03.2026",
+      "time": "14:00",
+      "homeTeam": "SKV Hochberg – Herren",
+      "guestTeam": "FC Muster",
+      "competition": "Kreisliga A",
+      "startDate": "2026-03-28T14:00:00",
+      "scrapedAt": "2026-03-30T10:00:00Z"
+    }
+  ]
+}
 ```
-Platzbelegung – Verein: 00ES8GNAVO00000PVV0AG08LVUPGND5I  Zeitraum: 01.03.2026 – 30.04.2026
 
-Mannschaften (3):
-  • SKV Hochberg – Herren (Herren)
-  • SKV Hochberg – A-Junioren (A-Junioren)
-  • SKV Hochberg – B-Junioren (B-Junioren)
+## Legacy-Modus (iste2 REST-API)
 
- ══════════════════════════════════════════════════════════════════
- 📍 Kunstrasenplatz, Sportanlage Hochberg, Hauptstr. 1, 70000 Stuttgart
- ══════════════════════════════════════════════════════════════════
+Das ursprüngliche Vorgehen über eine lokale [iste2/Fu-ball.de-REST-API](https://github.com/iste2/Fu-ball.de-REST-API) ist weiterhin über den `legacy`-Subcommand verfügbar:
 
-  📅 Samstag, 15. März 2026
-
-   Von    Bis    Mannschaft         Art          Gegner           Liga
-   10:45  12:15  SKV Hochberg       Herren       FC Muster        Kreisliga A
-   14:45  16:15  SKV Hochberg II    Herren       SV Beispiel      Kreisliga B
+```bash
+platzbelegung legacy --club-id ID --api-url http://localhost:5000
 ```
+
+## Hinweise
+
+- Die App scrapt fussball.de; Änderungen im Layout können das Scraping beeinflussen.
+- Beachte die Nutzungsbedingungen von fussball.de.
+- `data/` ist gitignoriert – Snapshots werden lokal gespeichert.
+
