@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime as _dt, timedelta
 from typing import DefaultDict
 
-from platzbelegung.models import Game, OccupancySlot, Venue
+from platzbelegung.models import Game, OccupancySlot, ScrapedGame, Venue
 
 # Puffer in Minuten, der vor dem Anstoß für Vorbereitung eingeplant wird
 PREPARATION_BUFFER_MINUTES: int = 15
@@ -107,3 +107,69 @@ def group_by_date(
     for slot in slots:
         grouped[slot.date].append(slot)
     return dict(grouped)
+
+
+def scraped_games_to_occupancy(
+    games: list[ScrapedGame],
+    preparation_buffer_minutes: int = 15,
+    default_duration_minutes: int = 90,
+    game_durations: dict[str, int] | None = None,
+) -> list[OccupancySlot]:
+    """Wandelt ScrapedGame-Objekte in Belegungsslots um.
+
+    Diese Funktion übernimmt die gleiche Rolle wie :func:`games_to_occupancy`,
+    arbeitet aber mit den einfacheren Daten, die der direkte Scraper liefert.
+
+    Die Spieldauer wird anhand des Wettkampfnamens bestimmt (enthält er z.B.
+    "A-Junioren", wird die konfigurierte Dauer für diese Mannschaftsart verwendet).
+    Ist keine passende Zuordnung möglich, wird ``default_duration_minutes`` verwendet.
+
+    Args:
+        games: Liste der gescrapten Spiele.
+        preparation_buffer_minutes: Puffer (Minuten) vor Anpfiff.
+        default_duration_minutes: Spieldauer, wenn keine Zuordnung gefunden.
+        game_durations: Zuordnung Mannschaftsart → Spieldauer in Minuten.
+
+    Returns:
+        Liste von OccupancySlot-Objekten, sortiert nach Datum und Uhrzeit.
+    """
+    if game_durations is None:
+        game_durations = {}
+
+    slots: list[OccupancySlot] = []
+
+    for game in games:
+        try:
+            kick_off = _dt.fromisoformat(game.start_date)
+        except (ValueError, TypeError):
+            continue
+
+        # Spieldauer: Wettkampfname mit bekannten Arten abgleichen
+        duration = default_duration_minutes
+        comp_lower = game.competition.lower()
+        for kind, dur in game_durations.items():
+            if kind.lower() in comp_lower:
+                duration = dur
+                break
+
+        venue = Venue(name=game.venue_name, address=game.venue_name)
+
+        start_time = (kick_off - timedelta(minutes=preparation_buffer_minutes)).time()
+        end_time = (kick_off + timedelta(minutes=duration)).time()
+
+        slots.append(
+            OccupancySlot(
+                venue=venue,
+                date=kick_off.date(),
+                start_time=start_time,
+                end_time=end_time,
+                team_name=game.home_team,
+                team_kind="",
+                opponent=game.guest_team,
+                league=game.competition,
+                is_home_game=True,
+            )
+        )
+
+    slots.sort(key=lambda s: (s.date, s.start_time))
+    return slots

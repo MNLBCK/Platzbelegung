@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "platzbelegung"
-version = "0.1.0"
+version = "0.2.0"
 description = "Fußball-Platzbelegungs-Übersicht – liest Daten von fussball.de aus und stellt die Belegung von Sportplätzen übersichtlich dar."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,6 +12,9 @@ license = { text = "MIT" }
 dependencies = [
     "requests>=2.31",
     "rich>=13.0",
+    "beautifulsoup4>=4.12",
+    "jinja2>=3.1",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +28,9 @@ platzbelegung = "platzbelegung.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"platzbelegung" = ["templates/*.html.j2"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
