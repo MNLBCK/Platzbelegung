@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Platzbelegung</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <h1>⚽ Platzbelegung</h1>
+      <p class="header-sub">Übersicht der Spielbelegung auf Sportplätzen (Quelle: fussball.de)</p>
+    </div>
+  </header>
+
+  <main>
+    <!-- Venue Configuration Panel -->
+    <section class="panel" id="config-panel">
+      <h2>Sportplätze konfigurieren</h2>
+
+      <div class="search-section">
+        <h3>Sportplatz suchen</h3>
+        <div class="input-row">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Sportplatz-Name eingeben…"
+            autocomplete="off"
+          />
+          <button id="search-btn" class="btn btn-primary">Suchen</button>
+        </div>
+        <div id="search-results" class="search-results hidden"></div>
+      </div>
+
+      <div class="manual-section">
+        <h3>Platz manuell hinzufügen</h3>
+        <div class="input-row">
+          <input
+            type="text"
+            id="venue-id-input"
+            placeholder="fussball.de Sportstätten-ID oder URL"
+            autocomplete="off"
+          />
+          <input
+            type="text"
+            id="venue-name-input"
+            placeholder="Anzeigename (optional)"
+            autocomplete="off"
+          />
+          <button id="add-venue-btn" class="btn btn-primary">Hinzufügen</button>
+        </div>
+        <p class="hint">
+          Die Sportstätten-ID finden Sie in der URL auf fussball.de:<br />
+          <code>https://www.fussball.de/sportstaette/-/id/<strong>IHRE-ID</strong></code>
+        </p>
+      </div>
+
+      <div class="demo-section">
+        <button id="demo-btn" class="btn btn-secondary">Demo-Daten laden</button>
+        <span class="hint-inline">Zum Ausprobieren ohne fussball.de-Zugang</span>
+      </div>
+
+      <div id="venues-list" class="venues-list">
+        <h3>Überwachte Plätze</h3>
+        <p id="no-venues-msg" class="empty-msg">Noch keine Plätze hinzugefügt.</p>
+        <ul id="venues-ul"></ul>
+        <div id="load-controls" class="load-controls hidden">
+          <button id="load-games-btn" class="btn btn-primary">Spiele laden</button>
+          <button id="clear-venues-btn" class="btn btn-danger">Alle entfernen</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Games Display -->
+    <section class="panel" id="games-panel">
+      <div class="panel-header">
+        <h2>Belegungskalender</h2>
+        <div class="view-controls">
+          <button class="btn btn-sm btn-active" id="view-week-btn" data-view="week">Wochenansicht</button>
+          <button class="btn btn-sm" id="view-list-btn" data-view="list">Listenansicht</button>
+        </div>
+        <div class="nav-controls">
+          <button class="btn btn-sm" id="prev-week-btn">&#8249; Zurück</button>
+          <span id="current-week-label" class="week-label"></span>
+          <button class="btn btn-sm" id="next-week-btn">Weiter &#8250;</button>
+          <button class="btn btn-sm" id="today-btn">Heute</button>
+        </div>
+      </div>
+
+      <div id="loading-indicator" class="loading hidden">
+        <span class="spinner"></span> Spieldaten werden geladen…
+      </div>
+      <div id="error-msg" class="error-msg hidden"></div>
+
+      <!-- Week view -->
+      <div id="week-view" class="hidden">
+        <div class="week-grid" id="week-grid"></div>
+      </div>
+
+      <!-- List view -->
+      <div id="list-view" class="hidden">
+        <div id="games-list"></div>
+      </div>
+
+      <div id="no-games-msg" class="empty-msg hidden">
+        Keine Spiele im gewählten Zeitraum gefunden.
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>
+      Daten werden von <a href="https://www.fussball.de" target="_blank" rel="noopener noreferrer">fussball.de</a> abgerufen.
+      Kein offizielles Angebot des DFB.
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
