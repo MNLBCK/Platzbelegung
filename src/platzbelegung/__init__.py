@@ -1,0 +1,1 @@
+"""Platzbelegung – Fußball-Platzbelegungs-Übersicht."""
