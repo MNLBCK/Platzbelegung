@@ -416,7 +416,7 @@ app.put('/api/config/venues', (req, res) => {
   res.json({ ok: true, venues: config.venues });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3210;
 const server = app.listen(PORT, () => {
   console.log(`Platzbelegung server running on http://localhost:${PORT}`);
 });

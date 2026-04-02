@@ -126,7 +126,7 @@ Der Express-Server liest `data/latest.json`, das von `platzbelegung scrape` erze
 ```bash
 npm install
 npm start
-# → http://localhost:3000
+# → http://localhost:3210
 ```
 
 ### API-Endpunkte
