@@ -250,3 +250,149 @@ class TestScrapedGamesToOccupancy:
         ]
         slots = scraped_games_to_occupancy(games)
         assert slots[0].date < slots[1].date
+
+
+class TestHomeGameFilteringExplicit:
+    """Explizite Tests für die Heimspiel-Filterung und Platzhalter-Zeilen."""
+
+    def test_away_game_at_foreign_venue_excluded(self):
+        """Auswärtsspiel auf einem fremden Platz erzeugt keinen Belegungsslot.
+
+        Der Verein spielt auswärts: home_side.club_id != CLUB_ID.
+        Der eigene Platz ist dabei nicht belegt.
+        """
+        game = _make_game(
+            datetime(2026, 4, 10, 15, 0),
+            "Auswärtsplatz, Fremde Straße 5, 80001 Fremdstadt",
+            home_club="FOREIGN_CLUB",
+        )
+        slots = games_to_occupancy([game], CLUB_ID, {"Herren": 90})
+        assert slots == [], "Auswärtsspiel darf keinen Slot erzeugen"
+
+    def test_mixed_home_and_away_only_home_included(self):
+        """Aus einer gemischten Spielliste werden nur Heimspiele berücksichtigt."""
+        home_game = _make_game(
+            datetime(2026, 4, 5, 15, 0), "Heimplatz, Heimstraße 1, 70001 Heimstadt"
+        )
+        away_game = _make_game(
+            datetime(2026, 4, 12, 15, 0),
+            "Auswärtsplatz, Fremde Str. 1, 80001 Fremdstadt",
+            home_club="FOREIGN_CLUB",
+        )
+        slots = games_to_occupancy([home_game, away_game], CLUB_ID, {"Herren": 90})
+        assert len(slots) == 1
+        assert slots[0].venue.name == "Heimplatz"
+
+
+class TestScrapedGamesToOccupancyFiltering:
+    """Explizite Tests für Filterung von Platzhalter-Zeilen und Sonderfällen."""
+
+    def test_spielfrei_guest_excluded(self):
+        """ScrapedGame mit 'spielfrei' als Gegner darf keinen Belegungsslot erzeugen."""
+        from platzbelegung.models import ScrapedGame
+        from platzbelegung.parser import scraped_games_to_occupancy
+
+        game = ScrapedGame(
+            venue_id="V1",
+            venue_name="Platz 1",
+            date="05.04.2026",
+            time="11:00",
+            home_team="SKV Hochberg",
+            guest_team="spielfrei",
+            competition="Kreisliga A",
+            start_date="2026-04-05T11:00:00",
+            scraped_at="",
+        )
+        slots = scraped_games_to_occupancy([game])
+        assert slots == [], "'spielfrei'-Eintrag darf keinen Belegungsslot erzeugen"
+
+    def test_spielfrei_uppercase_excluded(self):
+        """'Spielfrei' in gemischter Groß-/Kleinschreibung wird ebenfalls gefiltert."""
+        from platzbelegung.models import ScrapedGame
+        from platzbelegung.parser import scraped_games_to_occupancy
+
+        game = ScrapedGame(
+            venue_id="V1",
+            venue_name="Platz",
+            date="05.04.2026",
+            time="11:00",
+            home_team="SKV Hochberg",
+            guest_team="Spielfrei",
+            competition="Liga",
+            start_date="2026-04-05T11:00:00",
+            scraped_at="",
+        )
+        slots = scraped_games_to_occupancy([game])
+        assert slots == []
+
+    def test_empty_guest_team_excluded(self):
+        """ScrapedGame ohne Gegner wird übersprungen."""
+        from platzbelegung.models import ScrapedGame
+        from platzbelegung.parser import scraped_games_to_occupancy
+
+        game = ScrapedGame(
+            venue_id="V1",
+            venue_name="Platz",
+            date="05.04.2026",
+            time="11:00",
+            home_team="SKV Hochberg",
+            guest_team="",
+            competition="Liga",
+            start_date="2026-04-05T11:00:00",
+            scraped_at="",
+        )
+        slots = scraped_games_to_occupancy([game])
+        assert slots == []
+
+    def test_malformed_venue_name_does_not_crash(self):
+        """ScrapedGame mit leerem Venue-Namen wird trotzdem verarbeitet."""
+        from platzbelegung.models import ScrapedGame
+        from platzbelegung.parser import scraped_games_to_occupancy
+
+        game = ScrapedGame(
+            venue_id="",
+            venue_name="",
+            date="05.04.2026",
+            time="14:00",
+            home_team="SKV Hochberg",
+            guest_team="FC Muster",
+            competition="Liga",
+            start_date="2026-04-05T14:00:00",
+            scraped_at="",
+        )
+        slots = scraped_games_to_occupancy([game])
+        assert len(slots) == 1
+        assert slots[0].venue.name == ""
+
+    def test_valid_game_alongside_spielfrei(self):
+        """Nur das echte Spiel wird konvertiert; der spielfrei-Eintrag wird verworfen."""
+        from platzbelegung.models import ScrapedGame
+        from platzbelegung.parser import scraped_games_to_occupancy
+
+        games = [
+            ScrapedGame(
+                venue_id="V1",
+                venue_name="Platz 1",
+                date="05.04.2026",
+                time="14:00",
+                home_team="SKV Hochberg",
+                guest_team="FC Muster",
+                competition="Liga",
+                start_date="2026-04-05T14:00:00",
+                scraped_at="",
+            ),
+            ScrapedGame(
+                venue_id="V1",
+                venue_name="Platz 1",
+                date="12.04.2026",
+                time="14:00",
+                home_team="SKV Hochberg",
+                guest_team="spielfrei",
+                competition="Liga",
+                start_date="2026-04-12T14:00:00",
+                scraped_at="",
+            ),
+        ]
+        slots = scraped_games_to_occupancy(games)
+        assert len(slots) == 1
+        assert slots[0].opponent == "FC Muster"

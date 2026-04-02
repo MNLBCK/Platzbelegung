@@ -9,6 +9,7 @@ import pytest
 
 from platzbelegung.scraper import (
     FussballDeScraper,
+    _is_placeholder_team,
     _normalize_venue_name,
     _parse_german_datetime,
     filter_games_by_venue_configs,
@@ -489,4 +490,238 @@ class TestFilterGamesByVenueConfigs:
         result = filter_games_by_venue_configs(games, [vc])
         assert len(result) == 1
         assert result[0].venue_name == "GWV-Sportpark (Kunstrasen)"
+
+    def test_away_game_at_foreign_venue_excluded(self):
+        """Auswärtsspiele auf fremden Plätzen werden durch Venue-Filter ausgeschlossen."""
+        home_venue_game = _make_game("HOME_VENUE", "Heimstadion")
+        away_venue_game = _make_game("AWAY_VENUE", "Gegnerplatz")
+        vc = self._make_config(id="HOME_VENUE")
+        result = filter_games_by_venue_configs(
+            [home_venue_game, away_venue_game], [vc]
+        )
+        assert len(result) == 1
+        assert result[0].venue_id == "HOME_VENUE"
+
+    def test_only_home_venue_games_remain_after_filter(self):
+        """Nach Venue-Filterung verbleiben nur Spiele auf den konfigurierten Plätzen."""
+        games = [
+            _make_game("V_HOME", "Kunstrasenplatz"),
+            _make_game("V_AWAY1", "Gegnerplatz 1"),
+            _make_game("V_AWAY2", "Gegnerplatz 2"),
+            _make_game("V_HOME", "Kunstrasenplatz"),
+        ]
+        vc = self._make_config(id="V_HOME")
+        result = filter_games_by_venue_configs(games, [vc])
+        assert len(result) == 2
+        assert all(g.venue_id == "V_HOME" for g in result)
+
+
+# ---------------------------------------------------------------------------
+# _is_placeholder_team
+# ---------------------------------------------------------------------------
+
+class TestIsPlaceholderTeam:
+    def test_spielfrei_lowercase(self):
+        assert _is_placeholder_team("spielfrei") is True
+
+    def test_spielfrei_mixed_case(self):
+        assert _is_placeholder_team("Spielfrei") is True
+        assert _is_placeholder_team("SPIELFREI") is True
+
+    def test_spielfrei_with_whitespace(self):
+        assert _is_placeholder_team("  spielfrei  ") is True
+
+    def test_bye(self):
+        assert _is_placeholder_team("bye") is True
+        assert _is_placeholder_team("BYE") is True
+
+    def test_normal_team_name(self):
+        assert _is_placeholder_team("SKV Hochberg") is False
+        assert _is_placeholder_team("FC Muster") is False
+
+    def test_empty_string(self):
+        assert _is_placeholder_team("") is False
+
+
+# ---------------------------------------------------------------------------
+# Spielfrei-Filterung in den Parsern
+# ---------------------------------------------------------------------------
+
+_SPIELFREI_TABLE_HTML = """
+<html><body>
+  <h1 class="headline">Kunstrasenplatz</h1>
+  <table class="table-striped">
+    <tbody>
+      <tr>
+        <td>28.03.2026</td>
+        <td>14:00</td>
+        <td>SKV Hochberg</td>
+        <td></td>
+        <td>FC Muster</td>
+        <td>Kreisliga A</td>
+      </tr>
+      <tr>
+        <td>04.04.2026</td>
+        <td>11:00</td>
+        <td>SKV Hochberg II</td>
+        <td></td>
+        <td>spielfrei</td>
+        <td>Kreisliga B</td>
+      </tr>
+    </tbody>
+  </table>
+</body></html>
+"""
+
+_SPIELFREI_FIXTURE_HTML = """
+<html><body>
+  <h2 class="headline">Rasenplatz</h2>
+  <div class="fixture-list-item">
+    <span class="date">12.04.2026</span>
+    <span class="time">11:00</span>
+    <span class="home-team">TSV Alpha</span>
+    <span class="guest-team">VfB Beta</span>
+    <span class="competition">B-Junioren</span>
+  </div>
+  <div class="fixture-list-item">
+    <span class="date">19.04.2026</span>
+    <span class="time">11:00</span>
+    <span class="home-team">TSV Alpha</span>
+    <span class="guest-team">spielfrei</span>
+    <span class="competition">B-Junioren</span>
+  </div>
+</body></html>
+"""
+
+
+class TestSpielfreiFilteringInTableParser:
+    def test_spielfrei_row_excluded(self):
+        """Zeile mit 'spielfrei' als Gegner darf keinen ScrapedGame-Eintrag erzeugen."""
+        scraper = FussballDeScraper()
+        with patch.object(
+            scraper._session, "get", return_value=_mock_response(_SPIELFREI_TABLE_HTML)
+        ):
+            games = scraper.scrape_venue_games("VENUE001")
+
+        assert len(games) == 1
+        assert games[0].guest_team == "FC Muster"
+
+    def test_spielfrei_uppercase_excluded(self):
+        """'Spielfrei' in gemischter Groß-/Kleinschreibung wird ebenfalls gefiltert."""
+        html = _SPIELFREI_TABLE_HTML.replace("spielfrei", "Spielfrei")
+        scraper = FussballDeScraper()
+        with patch.object(
+            scraper._session, "get", return_value=_mock_response(html)
+        ):
+            games = scraper.scrape_venue_games("V1")
+
+        assert len(games) == 1
+
+
+class TestSpielfreiFilteringInFixtureParser:
+    def test_spielfrei_fixture_excluded(self):
+        """fixture-list-item mit 'spielfrei' als Gegner wird übersprungen."""
+        scraper = FussballDeScraper()
+        with patch.object(
+            scraper._session, "get", return_value=_mock_response(_SPIELFREI_FIXTURE_HTML)
+        ):
+            games = scraper.scrape_venue_games("V2")
+
+        assert len(games) == 1
+        assert games[0].guest_team == "VfB Beta"
+
+
+class TestSpielfreiFilteringInMatchplanJson:
+    def test_spielfrei_in_json_excluded(self):
+        """JSON-Matchplan-Einträge mit 'spielfrei' als Gegner werden übersprungen."""
+        matchplan = {
+            "matches": [
+                {
+                    "venue": {"id": "V1", "name": "Platz"},
+                    "date": "01.04.2026",
+                    "time": "14:00",
+                    "homeTeam": {"name": "SKV Hochberg"},
+                    "awayTeam": {"name": "FC Muster"},
+                    "competition": {"name": "Liga"},
+                },
+                {
+                    "venue": {"id": "V1", "name": "Platz"},
+                    "date": "08.04.2026",
+                    "time": "14:00",
+                    "homeTeam": {"name": "SKV Hochberg"},
+                    "awayTeam": {"name": "spielfrei"},
+                    "competition": {"name": "Liga"},
+                },
+            ]
+        }
+        scraper = FussballDeScraper()
+        mock = MagicMock()
+        mock.headers = {"content-type": "application/json"}
+        mock.json.return_value = matchplan
+        mock.raise_for_status.return_value = None
+
+        with patch.object(scraper._session, "get", return_value=mock):
+            games = scraper.scrape_club_matchplan("CLUB001")
+
+        assert len(games) == 1
+        assert games[0].guest_team == "FC Muster"
+
+    def test_spielfrei_as_home_team_excluded(self):
+        """JSON-Einträge mit 'spielfrei' als Heimteam werden ebenfalls übersprungen."""
+        matchplan = {
+            "matches": [
+                {
+                    "venue": {"id": "V1", "name": "Platz"},
+                    "date": "01.04.2026",
+                    "time": "14:00",
+                    "homeTeam": {"name": "spielfrei"},
+                    "awayTeam": {"name": "SKV Hochberg"},
+                    "competition": {"name": "Liga"},
+                },
+            ]
+        }
+        scraper = FussballDeScraper()
+        mock = MagicMock()
+        mock.headers = {"content-type": "application/json"}
+        mock.json.return_value = matchplan
+        mock.raise_for_status.return_value = None
+
+        with patch.object(scraper._session, "get", return_value=mock):
+            games = scraper.scrape_club_matchplan("CLUB001")
+
+        assert games == []
+
+
+class TestSpielfreiFilteringInMatchplanHtml:
+    def test_spielfrei_in_html_matchplan_excluded(self):
+        """HTML-Matchplan-Fragment mit 'spielfrei' als Gegner wird übersprungen."""
+        html = """
+        <div class="match-row" data-venue-id="V1">
+            <span class="date">01.04.2026</span>
+            <span class="time">14:00</span>
+            <span class="home-team">SKV Hochberg</span>
+            <span class="guest-team">FC Muster</span>
+            <span class="competition">Liga</span>
+            <span class="venue-name">Platz</span>
+        </div>
+        <div class="match-row" data-venue-id="V1">
+            <span class="date">08.04.2026</span>
+            <span class="time">14:00</span>
+            <span class="home-team">SKV Hochberg</span>
+            <span class="guest-team">spielfrei</span>
+            <span class="competition">Liga</span>
+            <span class="venue-name">Platz</span>
+        </div>
+        """
+        scraper = FussballDeScraper()
+        mock = MagicMock()
+        mock.headers = {"content-type": "text/html"}
+        mock.text = html
+        mock.raise_for_status.return_value = None
+
+        with patch.object(scraper._session, "get", return_value=mock):
+            games = scraper.scrape_club_matchplan("CLUB001")
+
+        assert len(games) == 1
+        assert games[0].guest_team == "FC Muster"
 
