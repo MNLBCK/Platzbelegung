@@ -105,6 +105,49 @@ function parseGermanDate(dateStr, timeStr) {
 }
 
 /**
+ * Search fussball.de for clubs (Vereine) by name.
+ * @param {string} query - search term
+ * @returns {Promise<Array>} Array of club objects {id, name, location, url}
+ */
+async function searchClubs(query) {
+  const cacheKey = `clubs_${query}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const url = `${FUSSBALL_DE_BASE}/suche/-/suche/${encodeURIComponent(query)}/typ/verein`;
+
+  const response = await axios.get(url, {
+    headers: HTTP_HEADERS,
+    timeout: 15000,
+    maxContentLength: 5 * 1024 * 1024,
+  });
+
+  const $ = cheerio.load(response.data);
+  const clubs = [];
+
+  // Note: selectors based on fussball.de's current search result HTML structure
+  $('.search-result-item, .result-item').each((_, item) => {
+    const link = $(item).find('a').first();
+    const href = link.attr('href') || '';
+    const name = link.text().trim() || $(item).find('.title').text().trim();
+    const location = $(item).find('.location, .subtitle').text().trim();
+
+    const idMatch = href.match(/\/id\/([^/?#]+)/);
+    if (!idMatch || !name) return;
+
+    clubs.push({
+      id: idMatch[1],
+      name,
+      location,
+      url: href.startsWith('http') ? href : `${FUSSBALL_DE_BASE}${href}`,
+    });
+  });
+
+  cache.set(cacheKey, clubs);
+  return clubs;
+}
+
+/**
  * Search fussball.de for venues by name (used by the venue discovery UI).
  * This search is lightweight and does not duplicate the Python scraper's
  * data-collection role.
@@ -216,6 +259,50 @@ app.get('/api/search', async (req, res) => {
     console.error('Error searching venues:', err.message);
     res.status(502).json({ error: 'Fehler bei der Suche' });
   }
+});
+
+/**
+ * GET /api/search/clubs?q=Vereinsname
+ * Searches fussball.de for clubs (Vereine) matching the query.
+ * Used by the UI for club discovery and configuration.
+ */
+app.get('/api/search/clubs', async (req, res) => {
+  const query = req.query.q;
+  if (!query || query.trim().length < 2) {
+    return res.status(400).json({ error: 'Suchbegriff zu kurz (min. 2 Zeichen)' });
+  }
+
+  try {
+    const clubs = await searchClubs(query.trim());
+    res.json(clubs);
+  } catch (err) {
+    console.error('Error searching clubs:', err.message);
+    res.status(502).json({ error: 'Fehler bei der Suche' });
+  }
+});
+
+/**
+ * PUT /api/config/club
+ * Updates the club (Verein) configuration in config.yaml.
+ * Body: { id: "CLUB_ID", name: "Club Name" }
+ */
+app.put('/api/config/club', (req, res) => {
+  const { id, name } = req.body;
+  if (!id || typeof id !== 'string' || !id.trim()) {
+    return res.status(400).json({ error: 'Vereins-ID erforderlich.' });
+  }
+
+  const config = loadConfig() || {};
+  config.club = { id: String(id).trim() };
+  if (name && typeof name === 'string' && name.trim()) {
+    config.club.name = String(name).trim();
+  }
+
+  if (!saveConfig(config)) {
+    return res.status(500).json({ error: 'Konfiguration konnte nicht gespeichert werden.' });
+  }
+
+  res.json({ ok: true, club: config.club });
 });
 
 /**

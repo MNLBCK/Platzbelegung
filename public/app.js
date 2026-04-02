@@ -76,6 +76,100 @@ function extractVenueId(input) {
   return input;
 }
 
+/**
+ * Detect whether the given input is a fussball.de club (Verein) URL.
+ * Returns the club ID if it is, or null otherwise.
+ */
+function extractClubId(input) {
+  input = input.trim();
+  if (input.includes('/verein/')) {
+    const match = input.match(/\/id\/([^/?#]+)/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+// ─── Club Configuration ──────────────────────────────────────────────────────
+async function setClubConfig(id, name) {
+  try {
+    const resp = await fetch('/api/config/club', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name }),
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      showClubInfo(data.club.id, data.club.name);
+    } else {
+      alert(`Fehler: ${data.error || 'Unbekannter Fehler'}`);
+    }
+  } catch (_) {
+    // Server not reachable – show info with a warning
+    showClubInfo(id, name, true);
+  }
+}
+
+function showClubInfo(id, name, serverUnreachable = false) {
+  const infoEl = $('current-club-info');
+  const label = name ? `${name} (ID: ${id})` : `ID: ${id}`;
+  if (serverUnreachable) {
+    infoEl.textContent = `⚠ Verein: ${label} (Konfiguration nicht gespeichert – Server nicht erreichbar)`;
+    infoEl.classList.remove('current-club');
+  } else {
+    infoEl.textContent = `✓ Verein: ${label}`;
+    infoEl.classList.add('current-club');
+  }
+  showEl(infoEl, true);
+}
+
+async function doClubSearch(query) {
+  // If the input looks like a club URL, extract the ID directly
+  const clubId = extractClubId(query);
+  if (clubId) {
+    await setClubConfig(clubId, '');
+    $('club-search-input').value = '';
+    showEl($('club-search-results'), false);
+    return;
+  }
+
+  const resultsEl = $('club-search-results');
+  resultsEl.innerHTML = '';
+  showEl(resultsEl, true);
+
+  try {
+    const resp = await fetch(`/api/search/clubs?q=${encodeURIComponent(query)}`);
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      resultsEl.innerHTML = `<div class="search-no-results">${escapeHtml(data.error || 'Fehler bei der Suche')}</div>`;
+      return;
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      resultsEl.innerHTML = '<div class="search-no-results">Keine Vereine gefunden.</div>';
+      return;
+    }
+
+    data.forEach(club => {
+      const item = document.createElement('div');
+      item.className = 'search-result-item';
+      item.innerHTML = `
+        <div class="search-result-name">${escapeHtml(club.name)}</div>
+        <div class="search-result-loc">${escapeHtml(club.location || '')}</div>
+      `;
+      item.addEventListener('click', async () => {
+        await setClubConfig(club.id, club.name);
+        resultsEl.innerHTML = '';
+        showEl(resultsEl, false);
+        $('club-search-input').value = '';
+      });
+      resultsEl.appendChild(item);
+    });
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="search-no-results">Netzwerkfehler: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
 // ─── DOM helpers ────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 function showEl(el, show = true) {
@@ -225,12 +319,19 @@ async function saveVenueEditorToConfig() {
 /**
  * Load venue configuration from the server (config.yaml) and merge with
  * local state so aliases / patterns set via CLI are visible in the UI.
+ * Also displays the currently configured club (Verein).
  */
 async function syncVenuesFromServer() {
   try {
     const resp = await fetch('/api/config');
     if (!resp.ok) return;
     const data = await resp.json();
+
+    // Show the currently configured club
+    if (data.club && data.club.id) {
+      showClubInfo(data.club.id, data.club.name);
+    }
+
     const serverVenues = data.venues || [];
     if (!Array.isArray(serverVenues) || serverVenues.length === 0) return;
 
@@ -528,6 +629,19 @@ document.addEventListener('DOMContentLoaded', () => {
   state.currentWeekStart = getMonday(new Date());
   renderVenuesList();
 
+  // Club search
+  $('club-search-btn').addEventListener('click', () => {
+    const q = $('club-search-input').value.trim();
+    if (q.length >= 2) doClubSearch(q);
+    else if (q.length > 0) alert('Bitte mindestens 2 Zeichen eingeben.');
+  });
+  $('club-search-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const q = $('club-search-input').value.trim();
+      if (q.length >= 2) doClubSearch(q);
+    }
+  });
+
   // Search
   $('search-btn').addEventListener('click', () => {
     const q = $('search-input').value.trim();
@@ -544,6 +658,16 @@ document.addEventListener('DOMContentLoaded', () => {
   $('add-venue-btn').addEventListener('click', () => {
     const raw = $('venue-id-input').value.trim();
     if (!raw) { alert('Bitte eine Sportstätten-ID oder URL eingeben.'); return; }
+    // Detect club URLs and route to club configuration instead
+    const clubId = extractClubId(raw);
+    if (clubId) {
+      if (confirm('Dies ist ein Vereins-Link. Soll der Verein als Datenquelle konfiguriert werden?')) {
+        setClubConfig(clubId, '');
+        $('venue-id-input').value = '';
+        $('venue-name-input').value = '';
+      }
+      return;
+    }
     const id = extractVenueId(raw);
     const name = $('venue-name-input').value.trim() || id;
     if (!id) { alert('Ungültige Eingabe.'); return; }
@@ -609,6 +733,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', e => {
     if (!e.target.closest('.search-section') && !e.target.closest('#venue-editor')) {
       showEl($('search-results'), false);
+    }
+    if (!e.target.closest('.club-section')) {
+      showEl($('club-search-results'), false);
     }
   });
 
