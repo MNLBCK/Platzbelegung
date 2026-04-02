@@ -35,39 +35,96 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
-    """Scrapt konfigurierte Sportstätten und speichert einen JSON-Snapshot."""
-    from platzbelegung.scraper import FussballDeScraper
+    """Scrapt konfigurierte Sportstätten und speichert einen JSON-Snapshot.
+
+    Verwendet primär die club matchplan API (ajax.club.matchplan) und filtert
+    anschließend nach konfigurierten Sportstätten. Falls --venue-id angegeben
+    wird, wird der alte venue-basierte Scraper als Fallback verwendet.
+    """
+    from platzbelegung.scraper import FussballDeScraper, filter_games_by_venues
     from platzbelegung.storage import save_snapshot
 
-    venue_ids: list[str] = args.venue_id or [v.id for v in app_cfg.venues]
-    if not venue_ids:
-        console.print(
-            "[yellow]Hinweis:[/yellow] Keine Sportstätten konfiguriert. "
-            "Bitte --venue-id angeben oder in config.yaml unter 'venues' eintragen."
-        )
-        return 1
+    # Check if user wants to use old venue-based scraping
+    use_venue_scraping = args.venue_id is not None and len(args.venue_id) > 0
 
     scraper = FussballDeScraper(app_cfg.scraper)
     all_games = []
 
-    for vid in venue_ids:
-        console.print(f"  Scraping [cyan]{vid}[/cyan] …")
+    if use_venue_scraping:
+        # Legacy mode: scrape individual venues (deprecated)
+        venue_ids: list[str] = args.venue_id
+        console.print(
+            "[yellow]Hinweis:[/yellow] Verwende venue-basiertes Scraping (deprecated). "
+            "Dies ist weniger stabil als club-basiertes Scraping."
+        )
+        console.print()
+
+        for vid in venue_ids:
+            console.print(f"  Scraping venue [cyan]{vid}[/cyan] …")
+            try:
+                games = scraper.scrape_venue_games(vid)
+                console.print(f"    → {len(games)} Spiel(e) gefunden")
+                all_games.extend(games)
+            except requests.exceptions.RequestException as exc:
+                console.print(f"    [red]Netzwerkfehler:[/red] {exc}")
+                logger.debug("Scraping error for %s", vid, exc_info=True)
+            except Exception as exc:  # noqa: BLE001 – unexpected errors logged + shown
+                console.print(f"    [red]Fehler:[/red] {exc}")
+                logger.debug("Unexpected error scraping %s", vid, exc_info=True)
+    else:
+        # Primary mode: scrape club matchplan and filter by venues
+        if not app_cfg.club_id:
+            console.print(
+                "[red]Fehler:[/red] Keine club.id in config.yaml konfiguriert. "
+                "Bitte Vereins-ID eintragen oder --venue-id verwenden."
+            )
+            return 1
+
+        console.print(
+            f"Scraping club matchplan: [cyan]{app_cfg.club_name or app_cfg.club_id}[/cyan]"
+        )
+        console.print()
+
         try:
-            games = scraper.scrape_venue_games(vid)
-            console.print(f"    → {len(games)} Spiel(e) gefunden")
-            all_games.extend(games)
+            all_games = scraper.scrape_club_matchplan(
+                club_id=app_cfg.club_id,
+                season=app_cfg.season,
+            )
+            console.print(f"  → {len(all_games)} Spiel(e) vom Verein gefunden")
+
+            # Filter by configured venues if any
+            venue_ids = [v.id for v in app_cfg.venues]
+            if venue_ids:
+                console.print(
+                    f"  Filtere nach {len(venue_ids)} Sportstätte(n) …"
+                )
+                all_games = filter_games_by_venues(all_games, venue_ids)
+                console.print(
+                    f"  → {len(all_games)} Spiel(e) auf konfigurierten Plätzen"
+                )
+
         except requests.exceptions.RequestException as exc:
-            console.print(f"    [red]Netzwerkfehler:[/red] {exc}")
-            logger.debug("Scraping error for %s", vid, exc_info=True)
+            console.print(f"[red]Netzwerkfehler:[/red] {exc}")
+            logger.debug("Scraping error for club %s", app_cfg.club_id, exc_info=True)
+            return 1
         except Exception as exc:  # noqa: BLE001 – unexpected errors logged + shown
-            console.print(f"    [red]Fehler:[/red] {exc}")
-            logger.debug("Unexpected error scraping %s", vid, exc_info=True)
+            console.print(f"[red]Fehler:[/red] {exc}")
+            logger.debug(
+                "Unexpected error scraping club %s", app_cfg.club_id, exc_info=True
+            )
+            return 1
+
+    # Collect venue IDs for metadata
+    if use_venue_scraping:
+        venue_ids_meta = args.venue_id
+    else:
+        venue_ids_meta = [v.id for v in app_cfg.venues] if app_cfg.venues else []
 
     config_meta = {
         "club_id": app_cfg.club_id,
         "club_name": app_cfg.club_name,
         "season": app_cfg.season,
-        "venues": venue_ids,
+        "venues": venue_ids_meta,
     }
 
     snap_path = save_snapshot(
@@ -236,12 +293,15 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command")
 
     # scrape
-    p_scrape = sub.add_parser("scrape", help="Sportstätten scrapen und Snapshot speichern")
+    p_scrape = sub.add_parser(
+        "scrape",
+        help="Vereins-Matchplan scrapen und Snapshot speichern (primär via ajax.club.matchplan)",
+    )
     p_scrape.add_argument(
         "--venue-id",
         metavar="ID",
         nargs="+",
-        help="Sportstätten-ID(s) (überschreibt config.yaml)",
+        help="[DEPRECATED] Sportstätten-ID(s) direkt scrapen (verwendet alten HTML-Parser)",
     )
 
     # html
