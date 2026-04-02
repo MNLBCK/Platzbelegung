@@ -99,6 +99,73 @@ describe('GET /api/config', () => {
   });
 });
 
+describe('GET /api/search/clubs', () => {
+  it('returns 400 for short query', async () => {
+    const res = await request(app).get('/api/search/clubs?q=A');
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 400 without query param', async () => {
+    const res = await request(app).get('/api/search/clubs');
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+});
+
+describe('PUT /api/config/club', () => {
+  it('returns 400 when id is missing', async () => {
+    const res = await request(app).put('/api/config/club').send({ name: 'Test' });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 400 when id is empty string', async () => {
+    const res = await request(app).put('/api/config/club').send({ id: '', name: 'Test' });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('saves club and returns ok:true with club object', async () => {
+    const originalConfig = await request(app).get('/api/config');
+    const originalClub = originalConfig.body.club || {};
+
+    const res = await request(app)
+      .put('/api/config/club')
+      .send({ id: 'TESTCLUBID123', name: 'Test Verein' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.club).toHaveProperty('id', 'TESTCLUBID123');
+    expect(res.body.club).toHaveProperty('name', 'Test Verein');
+
+    // Restore original club config
+    if (originalClub.id) {
+      await request(app)
+        .put('/api/config/club')
+        .send({ id: originalClub.id, name: originalClub.name || '' });
+    }
+  });
+
+  it('saves club without name', async () => {
+    const originalConfig = await request(app).get('/api/config');
+    const originalClub = originalConfig.body.club || {};
+
+    const res = await request(app)
+      .put('/api/config/club')
+      .send({ id: 'TESTCLUBID456' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.club).toHaveProperty('id', 'TESTCLUBID456');
+
+    // Restore original club config
+    if (originalClub.id) {
+      await request(app)
+        .put('/api/config/club')
+        .send({ id: originalClub.id, name: originalClub.name || '' });
+    }
+  });
+});
+
 describe('PUT /api/config/venues', () => {
   it('returns 400 when body is missing venues array', async () => {
     const res = await request(app).put('/api/config/venues').send({});

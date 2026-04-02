@@ -21,6 +21,25 @@
     <section class="panel" id="config-panel">
       <h2>Sportplätze konfigurieren</h2>
 
+      <div class="club-section">
+        <h3>Verein auswählen</h3>
+        <div class="input-row">
+          <input
+            type="text"
+            id="club-search-input"
+            placeholder="Vereinsname oder fussball.de Verein-Link…"
+            autocomplete="off"
+          />
+          <button id="club-search-btn" class="btn btn-primary">Suchen</button>
+        </div>
+        <div id="club-search-results" class="search-results hidden"></div>
+        <p id="current-club-info" class="hint current-club hidden"></p>
+        <p class="hint">
+          Vereinslink von fussball.de einfügen oder Vereinsnamen eingeben.<br />
+          <code>https://www.fussball.de/verein/.../-/id/<strong>VEREINS-ID</strong></code>
+        </p>
+      </div>
+
       <div class="search-section">
         <h3>Sportplatz suchen</h3>
         <div class="input-row">
