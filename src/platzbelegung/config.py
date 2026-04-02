@@ -27,8 +27,10 @@ except ImportError:
 @dataclass
 class VenueConfig:
     """Eine konfigurierte Sportstätte."""
-    id: str
+    id: str = ""
     name: str = ""
+    aliases: list[str] = field(default_factory=list)
+    name_patterns: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -160,9 +162,16 @@ def load_config(path: Path | None = None) -> AppConfig:
     )
 
     venues = [
-        VenueConfig(id=v.get("id", ""), name=v.get("name", ""))
+        VenueConfig(
+            id=v.get("id", ""),
+            name=v.get("name", ""),
+            aliases=v.get("aliases", []) if isinstance(v.get("aliases"), list) else [],
+            name_patterns=v.get("name_patterns", []) if isinstance(v.get("name_patterns"), list) else [],
+        )
         for v in raw.get("venues", [])
-        if isinstance(v, dict) and v.get("id")
+        if isinstance(v, dict) and (
+            v.get("id") or v.get("name") or v.get("aliases") or v.get("name_patterns")
+        )
     ]
 
     return AppConfig(

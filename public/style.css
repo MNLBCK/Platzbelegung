@@ -351,6 +351,80 @@ main {
 .gli-vs { color: var(--text-light); font-size: 0.8rem; }
 .gli-comp { color: var(--text-light); font-size: 0.8rem; }
 
+/* btn-edit (pencil button next to venue items) */
+.btn-edit {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--primary);
+  padding: 0 0.2rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.btn-edit:hover { color: var(--primary-d); }
+
+/* venue-extra tag (alias/pattern count) */
+.venue-extra {
+  font-size: 0.72rem;
+  color: var(--white);
+  background: var(--primary);
+  border-radius: 10px;
+  padding: 0.1rem 0.45rem;
+  white-space: nowrap;
+}
+
+/* Venue editor panel */
+.venue-editor {
+  margin-top: 1.2rem;
+  border: 2px solid var(--primary-l);
+  border-radius: var(--radius);
+  padding: 1.2rem;
+  background: #f9fdfb;
+}
+.venue-editor h3 {
+  color: var(--primary);
+  margin-bottom: 1rem;
+}
+.editor-field {
+  margin-bottom: 0.9rem;
+}
+.editor-field label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  color: var(--text);
+}
+.editor-field input,
+.editor-field textarea {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.editor-field input:focus,
+.editor-field textarea:focus { border-color: var(--primary); }
+.editor-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+.editor-status {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 5px;
+}
+.editor-status-ok  { background: #e8f5e9; color: #2e7d32; }
+.editor-status-err { background: #fdecea; color: var(--danger); }
+.editor-status-warn { background: #fff8e1; color: #f57f17; }
+
 /* Hidden utility */
 .hidden { display: none !important; }
 

@@ -41,7 +41,7 @@ def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
     anschließend nach konfigurierten Sportstätten. Falls --venue-id angegeben
     wird, wird der alte venue-basierte Scraper als Fallback verwendet.
     """
-    from platzbelegung.scraper import FussballDeScraper, filter_games_by_venues
+    from platzbelegung.scraper import FussballDeScraper, filter_games_by_venue_configs
     from platzbelegung.storage import save_snapshot
 
     # Check if user wants to use old venue-based scraping
@@ -93,12 +93,11 @@ def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
             console.print(f"  → {len(all_games)} Spiel(e) vom Verein gefunden")
 
             # Filter by configured venues if any
-            venue_ids = [v.id for v in app_cfg.venues]
-            if venue_ids:
+            if app_cfg.venues:
                 console.print(
-                    f"  Filtere nach {len(venue_ids)} Sportstätte(n) …"
+                    f"  Filtere nach {len(app_cfg.venues)} Sportstätte(n) …"
                 )
-                all_games = filter_games_by_venues(all_games, venue_ids)
+                all_games = filter_games_by_venue_configs(all_games, app_cfg.venues)
                 console.print(
                     f"  → {len(all_games)} Spiel(e) auf konfigurierten Plätzen"
                 )

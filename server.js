@@ -6,6 +6,7 @@ const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
 const path = require('path');
 const fs = require('fs');
+const yaml = require('js-yaml');
 
 const app = express();
 const cache = new NodeCache({ stdTTL: 300 }); // 5 min cache
@@ -16,6 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const FUSSBALL_DE_BASE = 'https://www.fussball.de';
 const DATA_DIR = path.join(__dirname, 'data');
 const LATEST_SNAPSHOT = path.join(DATA_DIR, 'latest.json');
+const CONFIG_FILE = path.join(__dirname, 'config.yaml');
 
 const HTTP_HEADERS = {
   'User-Agent':
@@ -27,10 +29,45 @@ const HTTP_HEADERS = {
 };
 
 /**
- * Load the latest JSON snapshot written by the Python scraper.
- * Returns null when no snapshot exists yet.
+ * Load and parse the config.yaml file.
+ * Returns parsed config object, or null on error.
  * @returns {object|null}
  */
+function loadConfig() {
+  try {
+    const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
+    return yaml.load(raw) || {};
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error('Error reading config.yaml:', err.message);
+    }
+    return null;
+  }
+}
+
+/**
+ * Write config object back to config.yaml, preserving formatting as much as possible.
+ * Returns true on success, false on error.
+ * @param {object} config
+ * @returns {boolean}
+ */
+function saveConfig(config) {
+  try {
+    const raw = yaml.dump(config, {
+      indent: 2,
+      lineWidth: 120,
+      noRefs: true,
+      quotingType: '"',
+    });
+    fs.writeFileSync(CONFIG_FILE, raw, 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Error writing config.yaml:', err.message);
+    return false;
+  }
+}
+
+
 function loadLatestSnapshot() {
   try {
     const raw = fs.readFileSync(LATEST_SNAPSHOT, 'utf8');
@@ -226,6 +263,70 @@ app.get('/api/demo', (_req, res) => {
   });
 
   res.json(games);
+});
+
+/**
+ * GET /api/config
+ * Returns the current venue configuration from config.yaml.
+ */
+app.get('/api/config', (_req, res) => {
+  const config = loadConfig();
+  if (!config) {
+    return res.status(404).json({ error: 'config.yaml nicht gefunden.' });
+  }
+  // Only expose the venues section and basic club/season info
+  res.json({
+    club: config.club || {},
+    season: config.season || '',
+    venues: config.venues || [],
+  });
+});
+
+/**
+ * PUT /api/config/venues
+ * Replaces the venues array in config.yaml with the provided list.
+ * Body: { venues: [{ id, name, aliases, name_patterns }] }
+ */
+app.put('/api/config/venues', (req, res) => {
+  const { venues } = req.body;
+  if (!Array.isArray(venues)) {
+    return res.status(400).json({ error: 'venues muss ein Array sein.' });
+  }
+
+  // Validate each venue entry
+  for (const v of venues) {
+    if (typeof v !== 'object' || v === null) {
+      return res.status(400).json({ error: 'Ungültiges Venue-Objekt.' });
+    }
+    if (v.aliases && !Array.isArray(v.aliases)) {
+      return res.status(400).json({ error: 'aliases muss ein Array sein.' });
+    }
+    if (v.name_patterns && !Array.isArray(v.name_patterns)) {
+      return res.status(400).json({ error: 'name_patterns muss ein Array sein.' });
+    }
+  }
+
+  const config = loadConfig() || {};
+
+  // Build cleaned venue list (keep only known fields)
+  config.venues = venues.map((v) => {
+    const entry = {};
+    if (v.id) entry.id = String(v.id);
+    if (v.name) entry.name = String(v.name);
+    if (Array.isArray(v.aliases) && v.aliases.length > 0) {
+      entry.aliases = v.aliases.map(String);
+    }
+    if (Array.isArray(v.name_patterns) && v.name_patterns.length > 0) {
+      entry.name_patterns = v.name_patterns.map(String);
+    }
+    return entry;
+  });
+
+  if (!saveConfig(config)) {
+    return res.status(500).json({ error: 'Konfiguration konnte nicht gespeichert werden.' });
+  }
+
+  res.json({ ok: true, venues: config.venues });
 });
 
 const PORT = process.env.PORT || 3000;

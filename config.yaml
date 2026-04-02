@@ -1,59 +1,25 @@
-# Zentrale Konfiguration für Platzbelegung
-# =========================================
-
 club:
-  # Vereins-ID aus der fussball.de-URL
-  # (https://www.fussball.de/verein/-/id/<ID>)
-  id: "00ES8GNAVO00000PVV0AG08LVUPGND5I"
-  name: "SKV Hochberg"
-
-# Aktuelle Saison-Code (2025/26 → "2526")
+  id: 00ES8GNAVO00000PVV0AG08LVUPGND5I
+  name: SKV Hochberg
 season: "2526"
-
-# Sportstätten, die überwacht werden sollen.
-# ID aus der fussball.de-URL:
-#   https://www.fussball.de/sportstaette/-/id/<ID>
 venues: []
-# Beispiel:
-# venues:
-#   - id: "00ES8GNAVO00000PVV0AG08LVUPGND5I"
-#     name: "Kunstrasenplatz"
-#   - id: "ZWEITER_PLATZ_ID"
-#     name: "Rasenplatz"
-
-# Zeitraum für die Abfrage
 date_range:
-  # "auto"   → aktueller Monat + Monat, der in 3 Wochen liegt
-  # "manual" → start und end explizit setzen
-  mode: "auto"
-  # start: "2026-03-01"   # nur bei mode: manual
-  # end:   "2026-04-30"   # nur bei mode: manual
-
-# Scraper-Einstellungen
+  mode: auto
 scraper:
-  fussball_de_base: "https://www.fussball.de"
-  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-  # Netzwerk-Timeout in Sekunden
+  fussball_de_base: https://www.fussball.de
+  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36
   timeout_seconds: 15
-  # Puffer in Minuten vor Anpfiff (Auf-/Abbauzeit)
   preparation_buffer_minutes: 15
-  # Spieldauer in Minuten, wenn keine spezifische Dauer bekannt ist
   default_game_duration_minutes: 90
-  # Spieldauern je Mannschaftsart (Schlüssel: exakte Bezeichnung auf fussball.de)
   game_durations:
     Herren: 90
-    "A-Junioren": 70
-    "B-Junioren": 70
-    "C-Junioren": 60
-    "D-Junioren": 50
-    "E-Junioren": 40
-    "F-Junioren": 30
-
-# Ausgabe-Einstellungen
+    A-Junioren: 70
+    B-Junioren: 70
+    C-Junioren: 60
+    D-Junioren: 50
+    E-Junioren: 40
+    F-Junioren: 30
 output:
-  # Verzeichnis für Datenspeicherung (wird erstellt, falls nicht vorhanden)
-  data_dir: "data"
-  # Unterverzeichnis für Snapshots mit Zeitstempel
-  snapshots_dir: "data/snapshots"
-  # Pfad für die lokal generierte HTML-Datei
-  html_file: "data/latest.html"
+  data_dir: data
+  snapshots_dir: data/snapshots
+  html_file: data/latest.html

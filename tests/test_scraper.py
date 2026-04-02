@@ -9,7 +9,9 @@ import pytest
 
 from platzbelegung.scraper import (
     FussballDeScraper,
+    _normalize_venue_name,
     _parse_german_datetime,
+    filter_games_by_venue_configs,
     filter_games_by_venues,
 )
 
@@ -342,4 +344,149 @@ class TestFilterGamesByVenues:
 
         filtered = filter_games_by_venues(games, ["V2", "V3"])
         assert len(filtered) == 0
+
+
+# ---------------------------------------------------------------------------
+# _normalize_venue_name
+# ---------------------------------------------------------------------------
+
+class TestNormalizeVenueName:
+    def test_strips_whitespace(self):
+        assert _normalize_venue_name("  Platz  ") == "platz"
+
+    def test_lowercases(self):
+        assert _normalize_venue_name("GWV-Sportpark") == "gwv-sportpark"
+
+    def test_collapses_multiple_spaces(self):
+        assert _normalize_venue_name("Platz  Nord") == "platz nord"
+
+    def test_empty_string(self):
+        assert _normalize_venue_name("") == ""
+
+
+# ---------------------------------------------------------------------------
+# filter_games_by_venue_configs
+# ---------------------------------------------------------------------------
+
+def _make_game(venue_id: str, venue_name: str) -> "ScrapedGame":
+    from platzbelegung.models import ScrapedGame
+    return ScrapedGame(
+        venue_id=venue_id,
+        venue_name=venue_name,
+        date="01.04.2026",
+        time="10:00",
+        home_team="Home",
+        guest_team="Away",
+        competition="Liga",
+        start_date="2026-04-01T10:00:00",
+        scraped_at="",
+    )
+
+
+class TestFilterGamesByVenueConfigs:
+    def _make_config(self, id="", name="", aliases=None, name_patterns=None):
+        from platzbelegung.config import VenueConfig
+        return VenueConfig(
+            id=id,
+            name=name,
+            aliases=aliases or [],
+            name_patterns=name_patterns or [],
+        )
+
+    def test_returns_all_when_no_configs(self):
+        games = [_make_game("V1", "Platz 1")]
+        assert filter_games_by_venue_configs(games, []) == games
+
+    def test_filters_by_venue_id(self):
+        games = [_make_game("V1", "Platz 1"), _make_game("V2", "Platz 2")]
+        vc = self._make_config(id="V1")
+        result = filter_games_by_venue_configs(games, [vc])
+        assert len(result) == 1
+        assert result[0].venue_id == "V1"
+
+    def test_filters_by_alias_case_insensitive(self):
+        games = [
+            _make_game("", "GWV-Sportpark (Kunstrasen)"),
+            _make_game("", "Rasenplatz"),
+        ]
+        vc = self._make_config(aliases=["gwv-sportpark (kunstrasen)"])
+        result = filter_games_by_venue_configs(games, [vc])
+        assert len(result) == 1
+        assert result[0].venue_name == "GWV-Sportpark (Kunstrasen)"
+
+    def test_alias_match_is_normalized(self):
+        """Alias with different whitespace/casing should still match."""
+        games = [_make_game("", "  Kirchweinbergweg  ")]
+        vc = self._make_config(aliases=["Kirchweinbergweg"])
+        result = filter_games_by_venue_configs(games, [vc])
+        assert len(result) == 1
+
+    def test_filters_by_name_pattern(self):
+        games = [
+            _make_game("", "GWV-Sportpark (Kunstrasen)"),
+            _make_game("", "Kirchweinbergweg"),
+            _make_game("", "Anderer Platz"),
+        ]
+        vc = self._make_config(name_patterns=["Kirchweinbergweg"])
+        result = filter_games_by_venue_configs(games, [vc])
+        assert len(result) == 1
+        assert result[0].venue_name == "Kirchweinbergweg"
+
+    def test_pattern_is_case_insensitive(self):
+        games = [_make_game("", "GWV-Sportpark (Kunstrasen)")]
+        vc = self._make_config(name_patterns=["gwv-sportpark"])
+        result = filter_games_by_venue_configs(games, [vc])
+        assert len(result) == 1
+
+    def test_regex_pattern_partial_match(self):
+        games = [
+            _make_game("", "Kunstrasen Hochberg (GWV)"),
+            _make_game("", "Rasenplatz Hochberg"),
+            _make_game("", "Sportplatz Anderswo"),
+        ]
+        vc = self._make_config(name_patterns=["Hochberg"])
+        result = filter_games_by_venue_configs(games, [vc])
+        assert len(result) == 2
+
+    def test_id_and_alias_in_same_config(self):
+        games = [
+            _make_game("V1", "Platz 1"),
+            _make_game("V2", "Alias-Platz"),
+            _make_game("V3", "Anderer"),
+        ]
+        vc = self._make_config(id="V1", aliases=["Alias-Platz"])
+        result = filter_games_by_venue_configs(games, [vc])
+        assert len(result) == 2
+
+    def test_invalid_regex_pattern_is_skipped(self, caplog):
+        import logging
+        games = [_make_game("", "Platz")]
+        vc = self._make_config(name_patterns=["[invalid"])
+        with caplog.at_level(logging.WARNING, logger="platzbelegung.scraper"):
+            result = filter_games_by_venue_configs(games, [vc])
+        # Invalid pattern should be skipped without crash
+        assert result == []
+        assert any("Ungültiges Regex-Muster" in r.message for r in caplog.records)
+
+    def test_unmatched_venues_logged(self, caplog):
+        import logging
+        games = [
+            _make_game("V1", "Platz 1"),
+            _make_game("V2", "Unmatched Platz"),
+        ]
+        vc = self._make_config(id="V1")
+        with caplog.at_level(logging.DEBUG, logger="platzbelegung.scraper"):
+            filter_games_by_venue_configs(games, [vc])
+        assert any("Nicht gematchte" in r.message for r in caplog.records)
+
+    def test_config_without_id_uses_alias(self):
+        """Venue config with only aliases (no stable ID) should still match."""
+        games = [
+            _make_game("", "GWV-Sportpark (Kunstrasen)"),
+            _make_game("SOME_ID", "Other Place"),
+        ]
+        vc = self._make_config(name="Kunstrasenplatz", aliases=["GWV-Sportpark (Kunstrasen)"])
+        result = filter_games_by_venue_configs(games, [vc])
+        assert len(result) == 1
+        assert result[0].venue_name == "GWV-Sportpark (Kunstrasen)"
 

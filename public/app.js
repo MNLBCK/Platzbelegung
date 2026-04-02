@@ -1,6 +1,6 @@
 /* global state */
 const state = {
-  venues: [],        // [{id, name}]
+  venues: [],        // [{id, name, aliases, name_patterns}]
   games: [],         // fetched game objects
   currentWeekStart: null, // Monday of displayed week
   view: 'week',      // 'week' | 'list'
@@ -111,37 +111,154 @@ function renderVenuesList() {
   state.venues.forEach((v, i) => {
     const li = document.createElement('li');
     const color = VENUE_COLORS[i % VENUE_COLORS.length];
+    const hasAliases = Array.isArray(v.aliases) && v.aliases.length > 0;
+    const hasPatterns = Array.isArray(v.name_patterns) && v.name_patterns.length > 0;
+    const extraInfo = [
+      hasAliases ? `${v.aliases.length} Alias(e)` : '',
+      hasPatterns ? `${v.name_patterns.length} Muster` : '',
+    ].filter(Boolean).join(', ');
+
     li.innerHTML = `
       <span class="venue-color-dot" style="background:${color}"></span>
       <span class="venue-name">${escapeHtml(v.name)}</span>
-      <span class="venue-id">${escapeHtml(v.id)}</span>
-      <button class="btn-remove" data-id="${escapeAttr(v.id)}" title="Entfernen">✕</button>
+      <span class="venue-id">${escapeHtml(v.id || '(kein ID)')}</span>
+      ${extraInfo ? `<span class="venue-extra">${escapeHtml(extraInfo)}</span>` : ''}
+      <button class="btn-edit" data-id="${escapeAttr(v.id || v.name)}" title="Bearbeiten">✎</button>
+      <button class="btn-remove" data-id="${escapeAttr(v.id || v.name)}" title="Entfernen">✕</button>
     `;
     ul.appendChild(li);
   });
 }
 
-function addVenue(id, name) {
-  if (!id) return;
-  if (state.venues.some(v => v.id === id)) {
+function addVenue(id, name, aliases, name_patterns) {
+  const key = id || name;
+  if (!key) return;
+  if (state.venues.some(v => (v.id || v.name) === key)) {
     alert(`Platz „${name || id}" ist bereits in der Liste.`);
     return;
   }
-  state.venues.push({ id, name: name || id });
+  state.venues.push({
+    id: id || '',
+    name: name || id || '',
+    aliases: aliases || [],
+    name_patterns: name_patterns || [],
+  });
   saveState();
   renderVenuesList();
 }
 
-function removeVenue(id) {
-  state.venues = state.venues.filter(v => v.id !== id);
+function removeVenue(key) {
+  state.venues = state.venues.filter(v => (v.id || v.name) !== key);
   saveState();
   renderVenuesList();
   // Remove games for this venue and refresh display
-  state.games = state.games.filter(g => g.venueId !== id);
+  state.games = state.games.filter(g => g.venueId !== key);
   renderCurrentView();
 }
 
-function escapeHtml(str) {
+// ─── Venue Editor ──────────────────────────────────────────────────────────
+function openVenueEditor(key) {
+  const venue = state.venues.find(v => (v.id || v.name) === key);
+  if (!venue) return;
+
+  $('venue-editor-id').value = key;
+  $('venue-editor-title').textContent = venue.name || venue.id || key;
+  $('venue-editor-name').value = venue.name || '';
+  $('venue-editor-aliases').value = (venue.aliases || []).join('\n');
+  $('venue-editor-patterns').value = (venue.name_patterns || []).join('\n');
+
+  const status = $('venue-editor-status');
+  status.textContent = '';
+  showEl(status, false);
+
+  showEl($('venue-editor'), true);
+  $('venue-editor-name').focus();
+}
+
+function closeVenueEditor() {
+  showEl($('venue-editor'), false);
+}
+
+function parseLines(text) {
+  return text.split('\n').map(l => l.trim()).filter(Boolean);
+}
+
+async function saveVenueEditorToConfig() {
+  const key = $('venue-editor-id').value;
+  const idx = state.venues.findIndex(v => (v.id || v.name) === key);
+  if (idx === -1) return;
+
+  const updatedVenue = {
+    id: state.venues[idx].id || '',
+    name: $('venue-editor-name').value.trim() || state.venues[idx].name,
+    aliases: parseLines($('venue-editor-aliases').value),
+    name_patterns: parseLines($('venue-editor-patterns').value),
+  };
+
+  state.venues[idx] = updatedVenue;
+  saveState();
+  renderVenuesList();
+
+  // Try to persist to server config
+  const status = $('venue-editor-status');
+  try {
+    const resp = await fetch('/api/config/venues', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ venues: state.venues }),
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      status.textContent = '✓ Konfiguration gespeichert.';
+      status.className = 'editor-status editor-status-ok';
+    } else {
+      status.textContent = `Fehler: ${data.error || 'Unbekannter Fehler'}`;
+      status.className = 'editor-status editor-status-err';
+    }
+  } catch (_) {
+    status.textContent = 'Nur lokal gespeichert (Server nicht erreichbar).';
+    status.className = 'editor-status editor-status-warn';
+  }
+  showEl(status, true);
+}
+
+/**
+ * Load venue configuration from the server (config.yaml) and merge with
+ * local state so aliases / patterns set via CLI are visible in the UI.
+ */
+async function syncVenuesFromServer() {
+  try {
+    const resp = await fetch('/api/config');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const serverVenues = data.venues || [];
+    if (!Array.isArray(serverVenues) || serverVenues.length === 0) return;
+
+    // Merge: add server venues not yet in state, update aliases/patterns for known ones
+    serverVenues.forEach(sv => {
+      const key = sv.id || sv.name;
+      if (!key) return;
+      const existing = state.venues.find(v => (v.id || v.name) === key);
+      if (existing) {
+        // Update aliases and patterns from server
+        if (sv.aliases) existing.aliases = sv.aliases;
+        if (sv.name_patterns) existing.name_patterns = sv.name_patterns;
+        if (sv.name) existing.name = sv.name;
+      } else {
+        state.venues.push({
+          id: sv.id || '',
+          name: sv.name || sv.id || key,
+          aliases: sv.aliases || [],
+          name_patterns: sv.name_patterns || [],
+        });
+      }
+    });
+    saveState();
+    renderVenuesList();
+  } catch (_) { /* ignore – server might not be running */ }
+}
+
+
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -437,9 +554,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Remove venues (event delegation)
   $('venues-ul').addEventListener('click', e => {
-    const btn = e.target.closest('.btn-remove');
-    if (btn) removeVenue(btn.dataset.id);
+    const removeBtn = e.target.closest('.btn-remove');
+    if (removeBtn) { removeVenue(removeBtn.dataset.id); return; }
+    const editBtn = e.target.closest('.btn-edit');
+    if (editBtn) openVenueEditor(editBtn.dataset.id);
   });
+
+  // Venue editor
+  $('venue-editor-save').addEventListener('click', saveVenueEditorToConfig);
+  $('venue-editor-cancel').addEventListener('click', closeVenueEditor);
 
   // Clear all
   $('clear-venues-btn').addEventListener('click', () => {
@@ -484,8 +607,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Hide search results on outside click
   document.addEventListener('click', e => {
-    if (!e.target.closest('.search-section')) {
+    if (!e.target.closest('.search-section') && !e.target.closest('#venue-editor')) {
       showEl($('search-results'), false);
     }
   });
+
+  // Sync venues from server config on load
+  syncVenuesFromServer();
 });
