@@ -2,51 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, time
 
-import pytest
-
-from platzbelegung.models import Game, OccupancySlot, TeamSide, Venue
+from platzbelegung.models import OccupancySlot, Venue
 from platzbelegung.parser import (
     extract_venue,
-    games_to_occupancy,
     group_by_date,
     group_by_venue,
 )
-
-CLUB_ID = "CLUB001"
-
-_HOME_SIDE = TeamSide(
-    id="SIDE001",
-    club_id=CLUB_ID,
-    name="SKV Hochberg",
-    kind="Herren",
-)
-_AWAY_SIDE = TeamSide(
-    id="SIDE002",
-    club_id="CLUB002",
-    name="FC Gegner",
-    kind="Herren",
-)
-
-
-def _make_game(
-    kick_off: datetime,
-    address: str,
-    home_club: str = CLUB_ID,
-    kind: str = "Herren",
-) -> Game:
-    home = TeamSide(id="H", club_id=home_club, name="SKV Hochberg", kind=kind)
-    away = TeamSide(id="A", club_id="CLUB002", name="FC Gegner", kind=kind)
-    return Game(
-        id="G1",
-        kick_off=kick_off,
-        home_side=home,
-        away_side=away,
-        league="Kreisliga A",
-        squad="Herren",
-        address=address,
-    )
 
 
 class TestExtractVenue:
@@ -80,54 +43,6 @@ class TestExtractVenue:
     def test_venue_str_same_name_address(self):
         venue = Venue(name="Hauptplatz", address="Hauptplatz")
         assert str(venue) == "Hauptplatz"
-
-
-class TestGamesToOccupancy:
-    def test_home_game_creates_slot(self):
-        game = _make_game(datetime(2026, 3, 15, 15, 0), "Platz A, Straße 1, 70001 Stadt")
-        slots = games_to_occupancy([game], CLUB_ID, {"Herren": 90})
-        assert len(slots) == 1
-        slot = slots[0]
-        assert slot.is_home_game is True
-        assert slot.team_kind == "Herren"
-        assert slot.opponent == "FC Gegner"
-
-    def test_away_game_no_slot(self):
-        game = _make_game(
-            datetime(2026, 3, 15, 15, 0),
-            "Platz A, Straße 1, 70001 Stadt",
-            home_club="OTHER_CLUB",
-        )
-        slots = games_to_occupancy([game], CLUB_ID, {"Herren": 90})
-        assert len(slots) == 0
-
-    def test_start_time_includes_buffer(self):
-        game = _make_game(datetime(2026, 3, 15, 15, 0), "Platz A, Straße 1")
-        slots = games_to_occupancy([game], CLUB_ID, {"Herren": 90})
-        # 15:00 - 15 min buffer = 14:45
-        assert slots[0].start_time == time(14, 45)
-
-    def test_end_time_calculated(self):
-        game = _make_game(datetime(2026, 3, 15, 15, 0), "Platz A, Straße 1")
-        slots = games_to_occupancy([game], CLUB_ID, {"Herren": 90})
-        # 15:00 + 90 min = 16:30
-        assert slots[0].end_time == time(16, 30)
-
-    def test_uses_default_duration_if_missing(self):
-        game = _make_game(datetime(2026, 3, 15, 15, 0), "Platz A, Straße 1", kind="Herren")
-        slots = games_to_occupancy([game], CLUB_ID, {})  # no durations
-        # default 90 min → 15:00 + 90 = 16:30
-        assert slots[0].end_time == time(16, 30)
-
-    def test_slots_sorted_by_date_and_time(self):
-        games = [
-            _make_game(datetime(2026, 3, 22, 15, 0), "Platz A"),
-            _make_game(datetime(2026, 3, 15, 11, 0), "Platz A"),
-            _make_game(datetime(2026, 3, 15, 15, 0), "Platz A"),
-        ]
-        slots = games_to_occupancy(games, CLUB_ID, {"Herren": 90})
-        dates = [(s.date, s.start_time) for s in slots]
-        assert dates == sorted(dates)
 
 
 class TestGroupByVenue:
@@ -250,38 +165,6 @@ class TestScrapedGamesToOccupancy:
         ]
         slots = scraped_games_to_occupancy(games)
         assert slots[0].date < slots[1].date
-
-
-class TestHomeGameFilteringExplicit:
-    """Explizite Tests für die Heimspiel-Filterung und Platzhalter-Zeilen."""
-
-    def test_away_game_at_foreign_venue_excluded(self):
-        """Auswärtsspiel auf einem fremden Platz erzeugt keinen Belegungsslot.
-
-        Der Verein spielt auswärts: home_side.club_id != CLUB_ID.
-        Der eigene Platz ist dabei nicht belegt.
-        """
-        game = _make_game(
-            datetime(2026, 4, 10, 15, 0),
-            "Auswärtsplatz, Fremde Straße 5, 80001 Fremdstadt",
-            home_club="FOREIGN_CLUB",
-        )
-        slots = games_to_occupancy([game], CLUB_ID, {"Herren": 90})
-        assert slots == [], "Auswärtsspiel darf keinen Slot erzeugen"
-
-    def test_mixed_home_and_away_only_home_included(self):
-        """Aus einer gemischten Spielliste werden nur Heimspiele berücksichtigt."""
-        home_game = _make_game(
-            datetime(2026, 4, 5, 15, 0), "Heimplatz, Heimstraße 1, 70001 Heimstadt"
-        )
-        away_game = _make_game(
-            datetime(2026, 4, 12, 15, 0),
-            "Auswärtsplatz, Fremde Str. 1, 80001 Fremdstadt",
-            home_club="FOREIGN_CLUB",
-        )
-        slots = games_to_occupancy([home_game, away_game], CLUB_ID, {"Herren": 90})
-        assert len(slots) == 1
-        assert slots[0].venue.name == "Heimplatz"
 
 
 class TestScrapedGamesToOccupancyFiltering:

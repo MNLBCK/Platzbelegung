@@ -193,21 +193,6 @@ _app_config: AppConfig = load_config()
 
 
 # ---------------------------------------------------------------------------
-# Legacy-Konstanten (Rückwärtskompatibilität)
-# ---------------------------------------------------------------------------
-
-# Vereins-ID des SKV Hochberg (Württemberg)
-CLUB_ID: str = _app_config.club_id
-
-# Basis-URL der lokal laufenden fussball.de REST API
-# (https://github.com/iste2/Fu-ball.de-REST-API)
-API_BASE_URL: str = "http://localhost:5000"
-
-# Aktuelle Saison (2025/2026)
-SEASON: str = _app_config.season
-
-
-# ---------------------------------------------------------------------------
 # Zeitraum-Berechnung
 # ---------------------------------------------------------------------------
 

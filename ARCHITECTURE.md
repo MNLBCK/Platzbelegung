@@ -107,9 +107,8 @@ Tests cover:
 
 ### If ajax.club.matchplan becomes unavailable
 
-1. Consider using the iste2 REST API wrapper (already supported via `legacy` command)
-2. Could fall back to venue-based scraping with improved error handling
-3. May need to implement rate limiting or more robust retry logic
+1. Could fall back to venue-based scraping with improved error handling
+2. May need to implement rate limiting or more robust retry logic
 
 ### Potential Improvements
 

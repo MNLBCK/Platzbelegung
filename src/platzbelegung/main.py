@@ -5,9 +5,6 @@ Subcommands
 scrape  – Sportstätten direkt von fussball.de scrapen und Daten speichern.
 html    – Statische HTML-Datei aus dem letzten Snapshot generieren.
 show    – Platzbelegung aus dem letzten Snapshot im Terminal anzeigen.
-legacy  – (Abwärtskompatibel) Daten über die lokale fussball.de REST-API abrufen.
-
-Wird kein Subcommand angegeben, verhält sich das Tool wie bisher (legacy).
 """
 
 from __future__ import annotations
@@ -20,7 +17,6 @@ from pathlib import Path
 import requests
 from rich.console import Console
 
-from platzbelegung import config as cfg
 from platzbelegung.config import load_config
 
 logging.basicConfig(
@@ -230,65 +226,6 @@ def _cmd_show(_args: argparse.Namespace, app_cfg, console: Console) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Subcommand: legacy (original iste2-API-basierter Pfad)
-# ---------------------------------------------------------------------------
-
-def _cmd_legacy(args: argparse.Namespace, app_cfg, console: Console) -> int:
-    """Ruft Daten über die lokale fussball.de REST-API ab (legacy)."""
-    from platzbelegung.api_client import ApiError, FussballDeApiClient
-    from platzbelegung.display import display_occupancy
-    from platzbelegung.parser import games_to_occupancy
-
-    club_id = args.club_id or app_cfg.club_id
-    api_url = args.api_url or cfg.API_BASE_URL
-    season = args.season or app_cfg.season
-
-    client = FussballDeApiClient(base_url=api_url)
-    start, end = cfg.get_date_range()
-
-    console.print(
-        f"[bold green]Platzbelegung – Verein:[/bold green] {club_id}  "
-        f"[dim]Zeitraum: {start.strftime('%d.%m.%Y')} – {end.strftime('%d.%m.%Y')}[/dim]"
-    )
-    console.print()
-
-    try:
-        teams = client.get_teams(club_id, season)
-        console.print(f"[bold]Mannschaften ({len(teams)}):[/bold]")
-        for team in teams:
-            console.print(f"  • {team.name} [dim]({team.kind or '–'})[/dim]")
-        console.print()
-    except ApiError as exc:
-        console.print(f"[red]Fehler beim Abrufen der Mannschaften:[/red] {exc}")
-        return 1
-
-    try:
-        games = client.get_club_games(club_id, start, end, home_only=True)
-        console.print(f"[dim]Heimspiele im Zeitraum: {len(games)}[/dim]")
-        console.print()
-    except ApiError as exc:
-        console.print(f"[red]Fehler beim Abrufen der Spiele:[/red] {exc}")
-        return 1
-
-    team_kinds = {g.home_side.kind for g in games if g.home_side.kind}
-    game_durations: dict[str, int] = {}
-    for kind in team_kinds:
-        try:
-            duration = client.get_game_duration(kind)
-            game_durations[kind] = duration
-            logger.debug("Spieldauer %s: %d min", kind, duration)
-        except ApiError:
-            logger.warning(
-                "Spieldauer für '%s' nicht verfügbar, verwende %d min.", kind, 90
-            )
-            game_durations[kind] = 90
-
-    slots = games_to_occupancy(games, club_id, game_durations)
-    display_occupancy(slots, console=console)
-    return 0
-
-
-# ---------------------------------------------------------------------------
 # Argument-Parser
 # ---------------------------------------------------------------------------
 
@@ -334,24 +271,6 @@ def _build_parser() -> argparse.ArgumentParser:
     # show
     sub.add_parser("show", help="Platzbelegung aus letztem Snapshot im Terminal anzeigen")
 
-    # legacy
-    p_legacy = sub.add_parser(
-        "legacy",
-        help="Daten über die lokale fussball.de REST-API abrufen (iste2-API)",
-    )
-    p_legacy.add_argument(
-        "--club-id", default=None, metavar="ID",
-        help=f"Vereins-ID (Standard: {cfg.CLUB_ID})",
-    )
-    p_legacy.add_argument(
-        "--api-url", default=None, metavar="URL",
-        help=f"Basis-URL der fussball.de REST API (Standard: {cfg.API_BASE_URL})",
-    )
-    p_legacy.add_argument(
-        "--season", default=None, metavar="SAISON",
-        help=f"Saison-Code, z.B. '2526' für 2025/26 (Standard: {cfg.SEASON})",
-    )
-
     return p
 
 
@@ -375,8 +294,6 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_html(args, app_cfg, console)
     if command == "show":
         return _cmd_show(args, app_cfg, console)
-    if command == "legacy":
-        return _cmd_legacy(args, app_cfg, console)
 
     # Kein Subcommand: Hilfe anzeigen
     _build_parser().print_help()
