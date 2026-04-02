@@ -2,6 +2,22 @@
 
 Durchsucht online Quellen (vorrangig fussball.de) nach Spielen auf einem oder mehreren bestimmten Sportplätzen und stellt die Platzbelegung übersichtlich dar.
 
+## Datenquellen
+
+Die Anwendung nutzt primär die **club matchplan API** (`ajax.club.matchplan`) von fussball.de, da diese stabiler und strukturierter ist als das HTML-Parsing von Sportstätten-Seiten.
+
+### Warum nicht mehr Sportstätten-Seiten?
+
+Die direkten Sportstätten-URLs (`https://www.fussball.de/sportstaette/-/id/...`) zeigen nicht mehr zuverlässig alle Spiele an. Die HTML-Struktur ändert sich häufig und ist nicht für maschinelles Auslesen gedacht. Daher ist dieser Ansatz als **deprecated** markiert.
+
+### Club-first Architektur
+
+Der empfohlene Workflow ist:
+1. **Club Matchplan scrapen** → alle Spiele des Vereins über `ajax.club.matchplan`
+2. **Nach Sportstätten filtern** → nur Spiele auf den konfigurierten Plätzen anzeigen
+
+Dies ist robuster und einfacher zu warten, da die API-Struktur stabiler ist als HTML-Parsing.
+
 ## Architektur
 
 Das Projekt ist in zwei klar getrennte Schichten unterteilt:
@@ -27,9 +43,13 @@ config.yaml               ← zentrale Konfiguration (Verein, Plätze, Saison, �
 ```
 
 **Datenfluss:**
-1. `platzbelegung scrape` → scrapt fussball.de → speichert `data/latest.json` + `data/snapshots/*.json`
+1. `platzbelegung scrape` → scrapt club matchplan (ajax.club.matchplan) → filtert nach Sportstätten → speichert `data/latest.json` + `data/snapshots/*.json`
 2. `platzbelegung html` → liest `data/latest.json` → generiert `data/latest.html`
 3. Express-Server → liest `data/latest.json` → liefert dynamische Web-UI
+
+**Scraping-Strategie:**
+- **Primär:** Club matchplan API (`scraper.scrape_club_matchplan()`) – stabil, strukturiert
+- **Fallback:** Venue-based HTML parsing (`scraper.scrape_venue_games()`) – deprecated, fragil
 
 ## Voraussetzungen
 
@@ -86,6 +106,7 @@ Alternativ kann die Web-UI verwendet werden (Suche unter `/`) oder die Suche in 
 
 ```bash
 # 1. Daten scrapen und Snapshot speichern
+#    Verwendet primär club matchplan API, filtert nach konfigurierten Sportstätten
 platzbelegung scrape
 
 # 2a. Platzbelegung im Terminal anzeigen
@@ -98,7 +119,7 @@ platzbelegung html
 # Eigene HTML-Ausgabedatei
 platzbelegung html --output /tmp/belegung.html
 
-# Sportstätten direkt per CLI angeben (überschreibt config.yaml)
+# Legacy: Sportstätten direkt per CLI angeben (DEPRECATED - verwendet HTML-Parsing)
 platzbelegung scrape --venue-id ID1 ID2
 ```
 

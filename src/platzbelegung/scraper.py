@@ -1,8 +1,13 @@
-"""Direkter fussball.de HTML-Scraper.
+"""Direkter fussball.de Scraper.
 
-Scrapt Spielplandaten direkt von den öffentlichen fussball.de-Seiten,
-ohne eine zwischengeschaltete REST-API.  Entspricht der Logik, die
-zuvor in ``server.js`` (Node.js) implementiert war.
+Scrapt Spielplandaten direkt von fussball.de, primär über die AJAX-API
+für Vereins-Matchpläne (ajax.club.matchplan). Diese Methode ist stabiler
+als das Scrapen von Sportstätten-Seiten, da die HTML-Struktur sich
+häufiger ändert.
+
+Die venue-basierte Scraping-Methode ist weiterhin als Fallback verfügbar,
+sollte aber nur verwendet werden, wenn die club-basierte Methode nicht
+funktioniert.
 """
 
 from __future__ import annotations
@@ -24,6 +29,24 @@ logger = logging.getLogger(__name__)
 _DATE_RE = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")
 _TIME_RE = re.compile(r"(\d{2}):(\d{2})")
 _VENUE_ID_RE = re.compile(r"/id/([^/?#]+)")
+
+
+def filter_games_by_venues(
+    games: list[ScrapedGame], venue_ids: list[str]
+) -> list[ScrapedGame]:
+    """Filtert Spiele nach Sportstätten-IDs.
+
+    Args:
+        games: Liste von ScrapedGame-Objekten.
+        venue_ids: Liste von Sportstätten-IDs (z.B. aus config.yaml).
+
+    Returns:
+        Gefilterte Liste mit nur Spielen auf den angegebenen Sportstätten.
+    """
+    if not venue_ids:
+        return games
+    venue_id_set = set(venue_ids)
+    return [g for g in games if g.venue_id in venue_id_set]
 
 
 def _safe_text(el: Optional[Tag]) -> str:
@@ -63,11 +86,111 @@ class FussballDeScraper:
         )
 
     # ------------------------------------------------------------------
-    # Öffentliche Methoden
+    # Öffentliche Methoden – Club Matchplan (Primary)
+    # ------------------------------------------------------------------
+
+    def scrape_club_matchplan(
+        self,
+        club_id: str,
+        season: str | None = None,
+        limit: int = 100,
+    ) -> list[ScrapedGame]:
+        """Scrapt alle Spiele eines Vereins über ajax.club.matchplan.
+
+        Dies ist die primäre Scraping-Methode, da sie auf der strukturierten
+        AJAX-API basiert und stabiler ist als HTML-Parsing von Sportstätten-Seiten.
+
+        Args:
+            club_id: ID des Vereins (aus der fussball.de-URL).
+            season: Saison-Code (z.B. "2526" für 2025/26). Optional.
+            limit: Maximale Anzahl der zu ladenden Spiele (für Paginierung).
+
+        Returns:
+            Liste der gefundenen Spiele als ScrapedGame-Objekte.
+
+        Note:
+            Die Spiele enthalten möglicherweise mehrere Sportstätten.
+            Verwende anschließend Filterung nach venue_id, wenn nur
+            bestimmte Plätze relevant sind.
+        """
+        url = f"{self._cfg.fussball_de_base}/ajax.club.matchplan"
+        scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        logger.debug("Scraping club matchplan: %s (season=%s)", club_id, season)
+
+        params = {"id": club_id}
+        if season:
+            params["saisonId"] = season
+
+        all_games: list[ScrapedGame] = []
+        offset = 0
+        page = 1
+
+        while len(all_games) < limit:
+            try:
+                # Pagination via loadmore parameter
+                if offset > 0:
+                    params["loadmore"] = str(offset)
+
+                logger.debug("Fetching page %d (offset %d)", page, offset)
+                response = self._session.get(
+                    url, params=params, timeout=self._cfg.timeout_seconds
+                )
+                response.raise_for_status()
+
+                # Parse JSON or HTML response depending on what the API returns
+                content_type = response.headers.get("content-type", "")
+
+                if "application/json" in content_type:
+                    # JSON response - parse directly
+                    games = self._parse_matchplan_json(
+                        response.json(), scraped_at
+                    )
+                else:
+                    # HTML fragment response - parse as HTML
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    games = self._parse_matchplan_html(soup, scraped_at)
+
+                if not games:
+                    logger.debug("No more games found, stopping pagination")
+                    break
+
+                all_games.extend(games)
+                logger.debug("Page %d: %d games found", page, len(games))
+
+                # Check if we should continue pagination
+                # Many AJAX endpoints return empty or fewer results on last page
+                if len(games) < 20:  # Typical page size
+                    break
+
+                offset += len(games)
+                page += 1
+
+            except requests.exceptions.RequestException as exc:
+                logger.warning(
+                    "Failed to fetch page %d: %s", page, exc, exc_info=True
+                )
+                break
+
+        logger.info(
+            "Club %s: %d Spiel(e) gefunden über matchplan API", club_id, len(all_games)
+        )
+        return all_games[:limit]
+
+    # ------------------------------------------------------------------
+    # Öffentliche Methoden – Venue-based (Deprecated/Fallback)
     # ------------------------------------------------------------------
 
     def scrape_venue_games(self, venue_id: str) -> list[ScrapedGame]:
         """Scrapt alle Spiele für eine Sportstätte von fussball.de.
+
+        DEPRECATED: Diese Methode scrapt die HTML-Seiten von Sportstätten
+        (sportstaette/-/id/...), die jedoch keine stabilen Match-Rows mehr
+        anzeigen. Die HTML-Struktur ändert sich häufig und ist nicht für
+        maschinelles Auslesen gedacht.
+
+        Bevorzuge stattdessen scrape_club_matchplan() und filtere anschließend
+        nach venue_id.
 
         Args:
             venue_id: ID der Sportstätte (aus der fussball.de-URL).
@@ -75,6 +198,9 @@ class FussballDeScraper:
         Returns:
             Liste der gefundenen Spiele als ScrapedGame-Objekte.
         """
+        logger.warning(
+            "scrape_venue_games() is deprecated. Use scrape_club_matchplan() instead."
+        )
         url = f"{self._cfg.fussball_de_base}/sportstaette/-/id/{venue_id}"
         # Batch scrape time – shared across all games scraped in this call
         scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -153,7 +279,136 @@ class FussballDeScraper:
         return venues
 
     # ------------------------------------------------------------------
-    # Interne Parser
+    # Interne Parser – Club Matchplan
+    # ------------------------------------------------------------------
+
+    def _parse_matchplan_json(
+        self, data: dict, scraped_at: str
+    ) -> list[ScrapedGame]:
+        """Parst JSON-Response von ajax.club.matchplan."""
+        games: list[ScrapedGame] = []
+
+        # The structure might vary, but typically contains a games/matches array
+        matches = data.get("matches", data.get("games", []))
+
+        for match in matches:
+            # Extract venue information
+            venue_info = match.get("venue", {})
+            venue_id = venue_info.get("id", "")
+            venue_name = venue_info.get("name", "")
+
+            # Extract date and time
+            date_str = match.get("date", "")
+            time_str = match.get("time", "")
+
+            # Extract teams
+            home_team = match.get("homeTeam", {}).get("name", "")
+            guest_team = match.get("awayTeam", {}).get("name", "")
+
+            # Extract competition
+            competition = match.get("competition", {}).get("name", "")
+
+            if not date_str or not home_team:
+                continue
+
+            start_dt = _parse_german_datetime(date_str, time_str)
+            if not start_dt:
+                continue
+
+            games.append(
+                ScrapedGame(
+                    venue_id=venue_id,
+                    venue_name=venue_name,
+                    date=date_str,
+                    time=time_str,
+                    home_team=home_team,
+                    guest_team=guest_team,
+                    competition=competition,
+                    start_date=start_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                    scraped_at=scraped_at,
+                )
+            )
+
+        return games
+
+    def _parse_matchplan_html(
+        self, soup: BeautifulSoup, scraped_at: str
+    ) -> list[ScrapedGame]:
+        """Parst HTML-Fragment von ajax.club.matchplan.
+
+        Das AJAX-Endpoint gibt oft HTML-Fragmente zurück statt JSON.
+        Diese Methode parst die typischen HTML-Strukturen.
+        """
+        games: list[ScrapedGame] = []
+
+        # Try multiple selectors that fussball.de might use
+        for row in soup.select(
+            ".match-row, .game-row, .matchplan-row, table.table-striped tbody tr"
+        ):
+            # Extract venue - might be in data attributes or nested elements
+            # Check if the row itself has the data-venue-id attribute
+            venue_id = row.get("data-venue-id", "")
+            if not venue_id:
+                # Try to find it in a child element
+                venue_elem = row.select_one("[data-venue-id]")
+                venue_id = venue_elem.get("data-venue-id", "") if venue_elem else ""
+
+            venue_name_elem = row.select_one(
+                ".venue, .venue-name, [data-venue-name]"
+            )
+            if venue_name_elem:
+                venue_name = _safe_text(venue_name_elem) or venue_name_elem.get(
+                    "data-venue-name", ""
+                )
+            else:
+                venue_name = ""
+
+            # Extract date and time
+            date_text = _safe_text(
+                row.select_one(".date, .match-date, td:nth-child(1)")
+            )
+            time_text = _safe_text(
+                row.select_one(".time, .match-time, td:nth-child(2)")
+            )
+
+            # Extract teams
+            home_team = _safe_text(
+                row.select_one(".home-team, .team-home, td:nth-child(3)")
+            )
+            guest_team = _safe_text(
+                row.select_one(".guest-team, .team-guest, td:nth-child(5)")
+            )
+
+            # Extract competition
+            competition = _safe_text(
+                row.select_one(".competition, .league, td:nth-child(6)")
+            )
+
+            if not date_text or not home_team:
+                continue
+
+            start_dt = _parse_german_datetime(date_text, time_text)
+            if not start_dt:
+                continue
+
+            games.append(
+                ScrapedGame(
+                    venue_id=venue_id,
+                    venue_name=venue_name,
+                    date=date_text,
+                    time=time_text,
+                    home_team=home_team,
+                    guest_team=guest_team,
+                    competition=competition,
+                    start_date=start_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                    scraped_at=scraped_at,
+                )
+            )
+
+        return games
+
+    # ------------------------------------------------------------------
+    # Interne Parser – Venue Pages (Deprecated)
     # ------------------------------------------------------------------
 
     def _parse_table_rows(
