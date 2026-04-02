@@ -92,6 +92,20 @@ def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
             )
             console.print(f"  → {len(all_games)} Spiel(e) vom Verein gefunden")
 
+            # --debug-raw-matchplan: Alle Rohdaten vor der Filterung anzeigen
+            if getattr(args, "debug_raw_matchplan", False):
+                console.print()
+                console.print(
+                    f"[bold]Rohe Matchplan-Daten ({len(all_games)} Spiele vor Venues-Filterung):[/bold]"
+                )
+                for g in all_games:
+                    console.print(
+                        f"  [dim]{g.date} {g.time}[/dim]  "
+                        f"{g.home_team} vs {g.guest_team}  "
+                        f"[dim]@ {g.venue_name} ({g.venue_id})[/dim]"
+                    )
+                console.print()
+
             # Filter by configured venues if any
             if app_cfg.venues:
                 console.print(
@@ -301,6 +315,11 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="ID",
         nargs="+",
         help="[DEPRECATED] Sportstätten-ID(s) direkt scrapen (verwendet alten HTML-Parser)",
+    )
+    p_scrape.add_argument(
+        "--debug-raw-matchplan",
+        action="store_true",
+        help="Alle gescrapten Rohdaten (vor Venues-Filterung) ausgeben",
     )
 
     # html

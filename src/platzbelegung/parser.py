@@ -59,7 +59,8 @@ def games_to_occupancy(
     slots: list[OccupancySlot] = []
 
     for game in games:
-        # Nur Heimspiele berücksichtigen
+        # Nur Heimspiele berücksichtigen: Auswärtsspiele erzeugen keinen Slot,
+        # da der eigene Platz dabei nicht belegt wird.
         if game.home_side.club_id != club_id:
             continue
 
@@ -139,9 +140,16 @@ def scraped_games_to_occupancy(
     slots: list[OccupancySlot] = []
 
     for game in games:
+        # Spiele ohne Datum oder ungültigem Zeitstempel überspringen
         try:
             kick_off = _dt.fromisoformat(game.start_date)
         except (ValueError, TypeError):
+            continue
+
+        # Spielfrei-Einträge überspringen: kein echter Spielgegner.
+        # Diese Filterung erfolgt primär im Scraper; hier dient sie als
+        # Absicherung gegen unvorhergesehene Datenvarianten.
+        if not game.guest_team or game.guest_team.strip().lower() in {"spielfrei", "bye"}:
             continue
 
         # Spieldauer: Wettkampfname mit bekannten Arten abgleichen

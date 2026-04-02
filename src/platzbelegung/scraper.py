@@ -30,6 +30,20 @@ _DATE_RE = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")
 _TIME_RE = re.compile(r"(\d{2}):(\d{2})")
 _VENUE_ID_RE = re.compile(r"/id/([^/?#]+)")
 
+# Platzhalter-Bezeichnungen, die keinen echten Spielgegner darstellen.
+# Solche Einträge tauchen bei "Spielfrei"-Runden im Spielplan auf und
+# dürfen nicht als Belegungsslots erscheinen.
+_SPIELFREI_MARKERS: frozenset[str] = frozenset({"spielfrei", "bye"})
+
+
+def _is_placeholder_team(name: str) -> bool:
+    """Prüft, ob ein Mannschaftsname ein Platzhalter ist (z.B. 'spielfrei').
+
+    Platzhalter entstehen bei spielfreien Runden und repräsentieren keinen
+    echten Spielgegner.  Solche Zeilen müssen beim Parsen übersprungen werden.
+    """
+    return name.strip().lower() in _SPIELFREI_MARKERS
+
 
 def filter_games_by_venues(
     games: list[ScrapedGame], venue_ids: list[str]
@@ -400,6 +414,14 @@ class FussballDeScraper:
             if not date_str or not home_team:
                 continue
 
+            # Spielfrei-Einträge überspringen (kein echter Spielgegner)
+            if _is_placeholder_team(home_team) or _is_placeholder_team(guest_team):
+                logger.debug(
+                    "Überspringe Spielfrei-Eintrag (JSON): %r vs %r (%s)",
+                    home_team, guest_team, date_str,
+                )
+                continue
+
             start_dt = _parse_german_datetime(date_str, time_str)
             if not start_dt:
                 continue
@@ -476,6 +498,14 @@ class FussballDeScraper:
             if not date_text or not home_team:
                 continue
 
+            # Spielfrei-Einträge überspringen (kein echter Spielgegner)
+            if _is_placeholder_team(home_team) or _is_placeholder_team(guest_team):
+                logger.debug(
+                    "Überspringe Spielfrei-Eintrag (HTML): %r vs %r (%s)",
+                    home_team, guest_team, date_text,
+                )
+                continue
+
             start_dt = _parse_german_datetime(date_text, time_text)
             if not start_dt:
                 continue
@@ -523,6 +553,14 @@ class FussballDeScraper:
             if not date_text or not home_team:
                 continue
 
+            # Spielfrei-Einträge überspringen (kein echter Spielgegner)
+            if _is_placeholder_team(home_team) or _is_placeholder_team(guest_team):
+                logger.debug(
+                    "Überspringe Spielfrei-Eintrag (Tabelle): %r vs %r (%s)",
+                    home_team, guest_team, date_text,
+                )
+                continue
+
             start_dt = _parse_german_datetime(date_text, time_text)
             if not start_dt:
                 continue
@@ -559,6 +597,14 @@ class FussballDeScraper:
             competition = _safe_text(item.select_one(".competition, .league"))
 
             if not date_text or not home_team:
+                continue
+
+            # Spielfrei-Einträge überspringen (kein echter Spielgegner)
+            if _is_placeholder_team(home_team) or _is_placeholder_team(guest_team):
+                logger.debug(
+                    "Überspringe Spielfrei-Eintrag (Fixture): %r vs %r (%s)",
+                    home_team, guest_team, date_text,
+                )
                 continue
 
             start_dt = _parse_german_datetime(date_text, time_text)
