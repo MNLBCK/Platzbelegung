@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
-from typing import Optional
+from datetime import date, time
 
 
 @dataclass
@@ -53,48 +52,6 @@ class ScrapedGame:
             start_date=data.get("startDate", ""),
             scraped_at=data.get("scrapedAt", scraped_at),
         )
-
-
-@dataclass
-class Team:
-    """Eine Mannschaft eines Vereins."""
-
-    id: str
-    name: str
-    link: str
-    kind: str = ""  # Mannschaftsart, z.B. "Herren", "A-Junioren"
-
-
-@dataclass
-class TeamSide:
-    """Eine Mannschaft als Heim- oder Auswärtsteam eines Spiels."""
-
-    id: str
-    club_id: str
-    name: str
-    kind: str
-    link: str = ""
-    logo_url: str = ""
-
-
-@dataclass
-class Game:
-    """Ein Fußballspiel."""
-
-    id: str
-    kick_off: datetime
-    home_side: TeamSide
-    away_side: TeamSide
-    league: str
-    squad: str
-    address: str
-    squad_id: str = ""
-    dfbnet_id: str = ""
-    goals_home: Optional[str] = None
-    goals_away: Optional[str] = None
-    goals_home_half: Optional[str] = None
-    goals_away_half: Optional[str] = None
-    link: str = ""
 
 
 @dataclass(frozen=True)

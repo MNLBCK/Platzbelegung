@@ -49,7 +49,6 @@ config.yaml               ← zentrale Konfiguration (Verein, Plätze, Saison, �
 
 **Scraping-Strategie:**
 - **Primär:** Club matchplan API (`scraper.scrape_club_matchplan()`) – stabil, strukturiert
-- **Fallback:** Venue-based HTML parsing (`scraper.scrape_venue_games()`) – deprecated, fragil
 
 ## Voraussetzungen
 
@@ -118,9 +117,6 @@ platzbelegung html
 
 # Eigene HTML-Ausgabedatei
 platzbelegung html --output /tmp/belegung.html
-
-# Legacy: Sportstätten direkt per CLI angeben (DEPRECATED - verwendet HTML-Parsing)
-platzbelegung scrape --venue-id ID1 ID2
 ```
 
 ## Web-Server (Node.js)
@@ -167,7 +163,7 @@ Platzbelegung/
 ├── src/
 │   └── platzbelegung/
 │       ├── __init__.py
-│       ├── config.py                  # Lädt config.yaml, Legacy-Konstanten
+│       ├── config.py                  # Lädt config.yaml
 │       ├── scraper.py                 # Direkter fussball.de HTML-Scraper
 │       ├── storage.py                 # JSON-Snapshot-Verwaltung
 │       ├── models.py                  # Datenmodelle (ScrapedGame, OccupancySlot, …)
@@ -175,7 +171,6 @@ Platzbelegung/
 │       ├── render_html.py             # Jinja2-HTML-Generierung
 │       ├── display.py                 # Terminal-Ausgabe (rich)
 │       ├── main.py                    # CLI-Einstiegspunkt
-│       ├── api_client.py              # Legacy: iste2 REST-API-Client
 │       └── templates/
 │           └── occupancy.html.j2      # Geteilte HTML-Vorlage
 ├── data/                              # Gitignoriert – generierte Daten
@@ -189,7 +184,6 @@ Platzbelegung/
     ├── test_render_html.py
     ├── test_parser.py
     ├── test_display.py
-    ├── test_api_client.py
     └── server.test.js
 ```
 
@@ -230,14 +224,6 @@ npm test
     }
   ]
 }
-```
-
-## Legacy-Modus (iste2 REST-API)
-
-Das ursprüngliche Vorgehen über eine lokale [iste2/Fu-ball.de-REST-API](https://github.com/iste2/Fu-ball.de-REST-API) ist weiterhin über den `legacy`-Subcommand verfügbar:
-
-```bash
-platzbelegung legacy --club-id ID --api-url http://localhost:5000
 ```
 
 ## Hinweise
