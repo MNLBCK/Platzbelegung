@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-"
+echo "-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-"
 echo "Starting Platzbelegung Scraper"
 
 # Directories and PID file
@@ -27,13 +27,17 @@ if [ -s "$PIDFILE" ]; then
 	rm -f "$PIDFILE"
 fi
 
-
 npm install
 
 # Start the app and record its PID so it can be stopped next run
 nohup sh -c "exec env npm start" > "$LOGDIR/npm_log.log" 2>&1 < /dev/null &
 echo $! > "$PIDFILE"
 
-sleep 3
+echo "."
+sleep 1
+echo "."
+sleep 1
+echo "."
+sleep 1
 cat "$LOGDIR/npm_log.log"
-echo "-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-"
+echo "-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-=-=-=--=-=-=-"
