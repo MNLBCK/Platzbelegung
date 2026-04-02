@@ -28,6 +28,29 @@ const HTTP_HEADERS = {
   Connection: 'keep-alive',
 };
 
+function normalizeText(value) {
+  return String(value || '')
+    .replace(/\u200b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function toAbsoluteUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('//')) return `https:${url}`;
+  if (url.startsWith('/')) return `${FUSSBALL_DE_BASE}${url}`;
+  return url;
+}
+
+function slugifyVenue(value) {
+  const base = normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return base || 'unbekannte-spielstaette';
+}
+
 /**
  * Load and parse the config.yaml file.
  * Returns parsed config object, or null on error.
@@ -89,9 +112,18 @@ function loadLatestSnapshot() {
  */
 function parseGermanDate(dateStr, timeStr) {
   if (!dateStr) return null;
-  const match = dateStr.match(/(\d{2})\.(\d{2})\.(\d{4})/);
-  if (!match) return null;
-  const [, day, month, year] = match;
+  let match = dateStr.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  let day;
+  let month;
+  let year;
+  if (match) {
+    [, day, month, year] = match;
+  } else {
+    match = dateStr.match(/(\d{2})\.(\d{2})\.(\d{2})/);
+    if (!match) return null;
+    [, day, month, year] = match;
+    year = `20${year}`;
+  }
   const timeMatch = timeStr && timeStr.match(/(\d{2}):(\d{2})/);
   const hours = timeMatch ? parseInt(timeMatch[1], 10) : 0;
   const minutes = timeMatch ? parseInt(timeMatch[2], 10) : 0;
@@ -104,6 +136,14 @@ function parseGermanDate(dateStr, timeStr) {
   );
 }
 
+function formatGermanDate(date) {
+  return [
+    String(date.getDate()).padStart(2, '0'),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getFullYear()),
+  ].join('.');
+}
+
 /**
  * Search fussball.de for clubs (Vereine) by name.
  * @param {string} query - search term
@@ -114,7 +154,7 @@ async function searchClubs(query) {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const url = `${FUSSBALL_DE_BASE}/suche/-/suche/${encodeURIComponent(query)}/typ/verein`;
+  const url = `${FUSSBALL_DE_BASE}/suche/-/text/${encodeURIComponent(query)}/restriction/CLUB_AND_TEAM#!/`;
 
   const response = await axios.get(url, {
     headers: HTTP_HEADERS,
@@ -125,12 +165,12 @@ async function searchClubs(query) {
   const $ = cheerio.load(response.data);
   const clubs = [];
 
-  // Note: selectors based on fussball.de's current search result HTML structure
-  $('.search-result-item, .result-item').each((_, item) => {
-    const link = $(item).find('a').first();
+  $('#club-search-results #clublist li').each((_, item) => {
+    const link = $(item).find('a.image-wrapper').first();
     const href = link.attr('href') || '';
-    const name = link.text().trim() || $(item).find('.title').text().trim();
-    const location = $(item).find('.location, .subtitle').text().trim();
+    const name = normalizeText(link.find('.name').first().text());
+    const location = normalizeText(link.find('.sub').first().text());
+    const logoUrl = toAbsoluteUrl(link.find('img').first().attr('src') || '');
 
     const idMatch = href.match(/\/id\/([^/?#]+)/);
     if (!idMatch || !name) return;
@@ -139,12 +179,98 @@ async function searchClubs(query) {
       id: idMatch[1],
       name,
       location,
+      logoUrl,
       url: href.startsWith('http') ? href : `${FUSSBALL_DE_BASE}${href}`,
     });
   });
 
   cache.set(cacheKey, clubs);
   return clubs;
+}
+
+function parseClubMatchplanHtml(html) {
+  const $ = cheerio.load(html);
+  const games = [];
+
+  let currentDate = '';
+  let currentTime = '';
+  let currentCompetition = '';
+
+  $('table.table-striped tbody tr').each((_, row) => {
+    const $row = $(row);
+    const classes = ($row.attr('class') || '').split(/\s+/).filter(Boolean);
+
+    if (classes.includes('row-headline') || classes.includes('row-venue')) {
+      return;
+    }
+
+    if (classes.includes('row-competition')) {
+      const dateText = normalizeText($row.find('.column-date').first().text());
+      const competitionText = normalizeText($row.find('.column-team').first().text());
+      const dateMatch = dateText.match(/(\d{2}\.\d{2}\.(?:\d{2}|\d{4}))/);
+      const timeMatch = dateText.match(/(\d{2}:\d{2})/);
+      currentDate = dateMatch ? dateMatch[1] : '';
+      currentTime = timeMatch ? timeMatch[1] : '';
+      currentCompetition = competitionText;
+      return;
+    }
+
+    const clubCells = $row.find('td.column-club');
+    const homeTeam = normalizeText($(clubCells[0]).find('.club-name').text() || $(clubCells[0]).text());
+    const guestTeam = normalizeText($(clubCells[1]).find('.club-name, .info-text').text() || $(clubCells[1]).text());
+    if (!currentDate || !homeTeam) return;
+    if (/^(spielfrei|bye)$/i.test(homeTeam) || /^(spielfrei|bye)$/i.test(guestTeam)) return;
+
+    const $venueRow = $row.nextAll('tr.row-venue').first();
+    let venueName = '';
+    if ($venueRow.length > 0) {
+      let blockedByNextCompetition = false;
+      $row.nextAll('tr').each((__, nextRow) => {
+        if (nextRow === $venueRow[0]) return false;
+        const nextClasses = (nextRow.attribs.class || '').split(/\s+/).filter(Boolean);
+        if (nextClasses.includes('row-competition')) {
+          blockedByNextCompetition = true;
+          return false;
+        }
+        return undefined;
+      });
+      if (!blockedByNextCompetition) {
+        venueName = normalizeText($venueRow.find('td[colspan="3"]').first().text() || $venueRow.text());
+      }
+    }
+
+    const parsedDate = parseGermanDate(currentDate, currentTime);
+    if (!parsedDate) return;
+
+    games.push({
+      venueId: slugifyVenue(venueName),
+      venueName,
+      date: formatGermanDate(parsedDate),
+      time: currentTime,
+      homeTeam,
+      guestTeam,
+      competition: currentCompetition,
+      startDate: parsedDate.toISOString(),
+    });
+  });
+
+  return games;
+}
+
+async function fetchClubMatchplan(clubId, dateFrom, dateTo, matchType = 1, max = 100, offset = 0) {
+  const cacheKey = `matchplan_${clubId}_${dateFrom}_${dateTo}_${matchType}_${max}_${offset}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const url = `${FUSSBALL_DE_BASE}/ajax.club.matchplan/-/id/${encodeURIComponent(clubId)}/mode/PAGE/show-filter/false/max/${encodeURIComponent(String(max))}/datum-von/${encodeURIComponent(dateFrom)}/datum-bis/${encodeURIComponent(dateTo)}/match-type/${encodeURIComponent(String(matchType))}/show-venues/checked/offset/${encodeURIComponent(String(offset))}`;
+  const response = await axios.get(url, {
+    headers: HTTP_HEADERS,
+    timeout: 15000,
+    maxContentLength: 5 * 1024 * 1024,
+  });
+  const games = parseClubMatchplanHtml(response.data);
+  cache.set(cacheKey, games);
+  return games;
 }
 
 /**
@@ -278,6 +404,42 @@ app.get('/api/search/clubs', async (req, res) => {
   } catch (err) {
     console.error('Error searching clubs:', err.message);
     res.status(502).json({ error: 'Fehler bei der Suche' });
+  }
+});
+
+/**
+ * GET /api/club-matchplan?id=CLUB_ID&dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD[&matchType=1][&max=100]
+ * Loads the current club matchplan directly from fussball.de and returns games
+ * with extracted venues from the rendered HTML.
+ */
+app.get('/api/club-matchplan', async (req, res) => {
+  const { id, dateFrom, dateTo } = req.query;
+  const matchType = Number.parseInt(req.query.matchType, 10);
+  const max = Number.parseInt(req.query.max, 10) || 100;
+
+  if (!id || typeof id !== 'string' || !id.trim()) {
+    return res.status(400).json({ error: 'Vereins-ID erforderlich.' });
+  }
+  if (!dateFrom || !/^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) {
+    return res.status(400).json({ error: 'dateFrom muss im Format YYYY-MM-DD angegeben werden.' });
+  }
+  if (!dateTo || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+    return res.status(400).json({ error: 'dateTo muss im Format YYYY-MM-DD angegeben werden.' });
+  }
+
+  try {
+    const games = await fetchClubMatchplan(
+      id.trim(),
+      dateFrom,
+      dateTo,
+      Number.isNaN(matchType) ? 1 : matchType,
+      Math.min(Math.max(max, 1), 200),
+      0
+    );
+    res.json(games);
+  } catch (err) {
+    console.error('Error loading club matchplan:', err.message);
+    res.status(502).json({ error: 'Fehler beim Laden des Vereinsspielplans' });
   }
 });
 
@@ -421,4 +583,12 @@ const server = app.listen(PORT, () => {
   console.log(`Platzbelegung server running on http://localhost:${PORT}`);
 });
 
-module.exports = { app, server };
+module.exports = {
+  app,
+  server,
+  parseClubMatchplanHtml,
+  searchClubs,
+  fetchClubMatchplan,
+  parseGermanDate,
+  formatGermanDate,
+};

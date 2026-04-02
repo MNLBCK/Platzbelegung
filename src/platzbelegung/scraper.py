@@ -27,6 +27,7 @@ from platzbelegung.models import ScrapedGame
 logger = logging.getLogger(__name__)
 
 _DATE_RE = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")
+_DATE_SHORT_RE = re.compile(r"(\d{2})\.(\d{2})\.(\d{2})")
 _TIME_RE = re.compile(r"(\d{2}):(\d{2})")
 _VENUE_ID_RE = re.compile(r"/id/([^/?#]+)")
 
@@ -154,15 +155,24 @@ def filter_games_by_venue_configs(
 
 def _safe_text(el: Optional[Tag]) -> str:
     """Gibt den Text eines Elements zurück oder einen leeren String."""
-    return el.get_text(strip=True) if el else ""
+    return el.get_text(strip=True).replace("\u200b", "") if el else ""
 
 
 def _parse_german_datetime(date_str: str, time_str: str) -> Optional[datetime]:
     """Parst ein deutsches Datum und eine Uhrzeit zu einem datetime-Objekt."""
     m = _DATE_RE.search(date_str)
     if not m:
-        return None
-    day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        m_short = _DATE_SHORT_RE.search(date_str)
+        if m_short:
+            day, month, year = (
+                int(m_short.group(1)),
+                int(m_short.group(2)),
+                2000 + int(m_short.group(3)),
+            )
+        else:
+            return None
+    else:
+        day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
     t = _TIME_RE.search(time_str or "")
     hour = int(t.group(1)) if t else 0
     minute = int(t.group(2)) if t else 0
@@ -170,6 +180,14 @@ def _parse_german_datetime(date_str: str, time_str: str) -> Optional[datetime]:
         return datetime(year, month, day, hour, minute)
     except ValueError:
         return None
+
+
+def _normalize_german_date(date_str: str) -> str:
+    """Normalisiert deutsche Datumsangaben auf dd.mm.yyyy."""
+    parsed = _parse_german_datetime(date_str, "")
+    if not parsed:
+        return date_str
+    return parsed.strftime("%d.%m.%Y")
 
 
 class FussballDeScraper:
@@ -452,51 +470,104 @@ class FussballDeScraper:
         """
         games: list[ScrapedGame] = []
 
-        # Try multiple selectors that fussball.de might use
-        for row in soup.select(
-            ".match-row, .game-row, .matchplan-row, table.table-striped tbody tr"
-        ):
-            # Extract venue - might be in data attributes or nested elements
-            # Check if the row itself has the data-venue-id attribute
+        def _next_tag_sibling(row: Tag) -> Optional[Tag]:
+            sibling = row.next_sibling
+            while sibling is not None and not isinstance(sibling, Tag):
+                sibling = sibling.next_sibling
+            return sibling if isinstance(sibling, Tag) else None
+
+        tbody_rows = soup.select("table.table-striped tbody tr")
+        rows = tbody_rows or soup.select(".match-row, .game-row, .matchplan-row")
+
+        current_date_text = ""
+        current_time_text = ""
+        current_competition = ""
+
+        for row in rows:
+            row_classes = set(row.get("class", []))
+
+            if "row-headline" in row_classes or "row-venue" in row_classes:
+                continue
+
+            if "row-competition" in row_classes:
+                # fussball.de renders match metadata on a separate row.
+                date_cell = row.select_one(".column-date, .date, .match-date")
+                competition_cell = row.select_one(
+                    ".column-team, .competition, .league"
+                )
+                date_time_text = _safe_text(date_cell)
+                current_date_text = ""
+                current_time_text = ""
+
+                date_match = _DATE_RE.search(date_time_text)
+                if date_match:
+                    current_date_text = date_match.group(0)
+                else:
+                    date_match_short = _DATE_SHORT_RE.search(date_time_text)
+                    if date_match_short:
+                        current_date_text = date_match_short.group(0)
+
+                time_match = _TIME_RE.search(date_time_text)
+                if time_match:
+                    current_time_text = time_match.group(0)
+
+                current_competition = _safe_text(competition_cell)
+                continue
+
+            # Extract venue - might be in data attributes, nested elements,
+            # or in a following .row-venue row.
             venue_id = row.get("data-venue-id", "")
             if not venue_id:
-                # Try to find it in a child element
                 venue_elem = row.select_one("[data-venue-id]")
                 venue_id = venue_elem.get("data-venue-id", "") if venue_elem else ""
 
-            venue_name_elem = row.select_one(
-                ".venue, .venue-name, [data-venue-name]"
-            )
+            venue_name_elem = row.select_one(".venue, .venue-name, [data-venue-name]")
             if venue_name_elem:
                 venue_name = _safe_text(venue_name_elem) or venue_name_elem.get(
                     "data-venue-name", ""
                 )
             else:
-                venue_name = ""
+                next_row = _next_tag_sibling(row)
+                if next_row and "row-venue" in set(next_row.get("class", [])):
+                    venue_name = _safe_text(next_row.select_one("td[colspan='3']")) or _safe_text(next_row)
+                else:
+                    venue_name = ""
 
             # Extract date and time
-            date_text = _safe_text(
-                row.select_one(".date, .match-date, td:nth-child(1)")
-            )
-            time_text = _safe_text(
-                row.select_one(".time, .match-time, td:nth-child(2)")
-            )
+            date_text = _safe_text(row.select_one(".date, .match-date"))
+            time_text = _safe_text(row.select_one(".time, .match-time"))
+            if not date_text:
+                date_text = current_date_text
+            if not time_text:
+                time_text = current_time_text
 
             # Extract teams
-            home_team = _safe_text(
-                row.select_one(".home-team, .team-home, td:nth-child(3)")
-            )
-            guest_team = _safe_text(
-                row.select_one(".guest-team, .team-guest, td:nth-child(5)")
-            )
+            home_team = _safe_text(row.select_one(".home-team, .team-home"))
+            guest_team = _safe_text(row.select_one(".guest-team, .team-guest"))
+
+            if not home_team:
+                club_cells = row.select("td.column-club")
+                if len(club_cells) >= 1:
+                    home_team = _safe_text(club_cells[0].select_one(".club-name")) or _safe_text(club_cells[0])
+                if len(club_cells) >= 2:
+                    guest_team = _safe_text(club_cells[1].select_one(".club-name, .info-text")) or _safe_text(club_cells[1])
+
+            if not home_team:
+                home_team = _safe_text(row.select_one("td:nth-child(3)"))
+            if not guest_team:
+                guest_team = _safe_text(row.select_one("td:nth-child(5)"))
 
             # Extract competition
-            competition = _safe_text(
-                row.select_one(".competition, .league, td:nth-child(6)")
-            )
+            competition = _safe_text(row.select_one(".competition, .league"))
+            if not competition:
+                competition = current_competition
+            if not competition:
+                competition = _safe_text(row.select_one("td:nth-child(6)"))
 
             if not date_text or not home_team:
                 continue
+
+            date_text = _normalize_german_date(date_text)
 
             # Spielfrei-Einträge überspringen (kein echter Spielgegner)
             if _is_placeholder_team(home_team) or _is_placeholder_team(guest_team):

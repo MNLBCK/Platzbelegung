@@ -195,6 +195,113 @@ _MATCHPLAN_JSON = {
     ]
 }
 
+_REAL_MATCHPLAN_HTML_WITHOUT_VENUES = """
+<div data-ng-controller="AjaxController" id="id-club-matchplan-table" class="fixtures-matches">
+  <div class="table-container fixtures-matches-table club-matchplan-table">
+    <table class="table table-striped table-full-width">
+      <tbody>
+        <tr class="odd row-competition hidden-small">
+          <td class="column-date"><span class="hidden-small inline">So, 12.04.26 |&nbsp;</span>15:00</td>
+          <td colspan="3" class="column-team">
+            <a>Herren | Kreisliga A; Kreisliga</a>
+          </td>
+          <td colspan="2">
+            <a>ME | 355926184</a>
+          </td>
+        </tr>
+        <tr class="odd">
+          <td class="hidden-small"></td>
+          <td class="column-club">
+            <a class="club-wrapper">
+              <div class="club-name">SGM Hochberg/&#8203;Hochdorf</div>
+            </a>
+          </td>
+          <td class="column-colon">:</td>
+          <td class="column-club no-border">
+            <a class="club-wrapper">
+              <div class="club-name">VfB Neckarrems 1913 e.V.</div>
+            </a>
+          </td>
+          <td class="column-score"></td>
+          <td class="column-detail"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+"""
+
+_REAL_MATCHPLAN_HTML_WITH_VENUES = """
+<div data-ng-controller="AjaxController" id="id-club-matchplan-table" class="fixtures-matches">
+  <div class="table-container fixtures-matches-table club-matchplan-table">
+    <table class="table table-striped table-full-width">
+      <tbody>
+        <tr class="odd row-competition hidden-small">
+          <td class="column-date"><span class="hidden-small inline">Sa, 11.04.26 |&nbsp;</span>12:00</td>
+          <td colspan="3" class="column-team">
+            <a>D-Junioren | Bezirksfreundschaftsspiele</a>
+          </td>
+          <td colspan="2">
+            <a>FS | 550068375</a>
+          </td>
+        </tr>
+        <tr class="odd">
+          <td class="hidden-small"></td>
+          <td class="column-club">
+            <a class="club-wrapper">
+              <div class="club-name">SGM VfB Neckarrems/&#8203;SKV Hochberg/&#8203;SGV Hochdorf I</div>
+            </a>
+          </td>
+          <td class="column-colon">:</td>
+          <td class="column-club no-border">
+            <a class="club-wrapper">
+              <div class="club-name">SV Fellbach III U12P</div>
+            </a>
+          </td>
+          <td class="column-score"></td>
+          <td class="column-detail"></td>
+        </tr>
+        <tr class="odd row-venue hidden-small">
+          <td></td>
+          <td colspan="3">Kunstrasenplatz, GWV-Sportpark (Kunstrasen), Hummelberg 4, 71686 Remseck am Neckar</td>
+          <td></td>
+        </tr>
+        <tr class="row-competition hidden-small">
+          <td class="column-date"><span class="hidden-small inline">So, 12.04.26 |&nbsp;</span>15:00</td>
+          <td colspan="3" class="column-team">
+            <a>Herren | Kreisliga A; Kreisliga</a>
+          </td>
+          <td colspan="2">
+            <a>ME | 355926184</a>
+          </td>
+        </tr>
+        <tr>
+          <td class="hidden-small"></td>
+          <td class="column-club">
+            <a class="club-wrapper">
+              <div class="club-name">SGM Hochberg/&#8203;Hochdorf</div>
+            </a>
+          </td>
+          <td class="column-colon">:</td>
+          <td class="column-club no-border">
+            <a class="club-wrapper">
+              <div class="club-name">VfB Neckarrems 1913 e.V.</div>
+            </a>
+          </td>
+          <td class="column-score"></td>
+          <td class="column-detail"></td>
+        </tr>
+        <tr class="row-venue hidden-small">
+          <td></td>
+          <td colspan="3">Rasenplatz, Waldallee 70, Waldallee 70, 71686 Remseck am Neckar</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+"""
+
 
 class TestScrapeClubMatchplan:
     def test_parses_json_response(self):
@@ -244,6 +351,48 @@ class TestScrapeClubMatchplan:
         assert g.venue_id == "V123"
         assert g.home_team == "Team A"
         assert g.guest_team == "Team B"
+
+    def test_parses_real_matchplan_page_without_venue_rows(self):
+        """The exact show-filter=false page has no venue rows, but games must still parse."""
+        scraper = FussballDeScraper()
+        mock = MagicMock()
+        mock.headers = {"content-type": "text/html"}
+        mock.text = _REAL_MATCHPLAN_HTML_WITHOUT_VENUES
+        mock.raise_for_status.return_value = None
+
+        with patch.object(scraper._session, "get", return_value=mock):
+            games = scraper.scrape_club_matchplan("00ES8GNAVO00000PVV0AG08LVUPGND5I")
+
+        assert len(games) == 1
+        assert games[0].date == "12.04.2026"
+        assert games[0].time == "15:00"
+        assert games[0].home_team == "SGM Hochberg/Hochdorf"
+        assert games[0].guest_team == "VfB Neckarrems 1913 e.V."
+        assert games[0].competition == "Herren | Kreisliga A; Kreisliga"
+        assert games[0].venue_name == ""
+
+    def test_parses_real_matchplan_page_and_extracts_venues(self):
+        """show-venues=true adds row-venue rows that must be assigned to the previous game."""
+        scraper = FussballDeScraper()
+        mock = MagicMock()
+        mock.headers = {"content-type": "text/html"}
+        mock.text = _REAL_MATCHPLAN_HTML_WITH_VENUES
+        mock.raise_for_status.return_value = None
+
+        with patch.object(scraper._session, "get", return_value=mock):
+            games = scraper.scrape_club_matchplan("00ES8GNAVO00000PVV0AG08LVUPGND5I")
+
+        assert len(games) == 2
+        assert games[0].date == "11.04.2026"
+        assert games[0].time == "12:00"
+        assert games[0].home_team == "SGM VfB Neckarrems/SKV Hochberg/SGV Hochdorf I"
+        assert games[0].guest_team == "SV Fellbach III U12P"
+        assert games[0].venue_name == "Kunstrasenplatz, GWV-Sportpark (Kunstrasen), Hummelberg 4, 71686 Remseck am Neckar"
+        assert games[1].date == "12.04.2026"
+        assert games[1].time == "15:00"
+        assert games[1].home_team == "SGM Hochberg/Hochdorf"
+        assert games[1].guest_team == "VfB Neckarrems 1913 e.V."
+        assert games[1].venue_name == "Rasenplatz, Waldallee 70, Waldallee 70, 71686 Remseck am Neckar"
 
     def test_pagination_stops_on_empty_response(self):
         """Test that pagination stops when no more games are returned."""
@@ -724,4 +873,3 @@ class TestSpielfreiFilteringInMatchplanHtml:
 
         assert len(games) == 1
         assert games[0].guest_team == "FC Muster"
-
