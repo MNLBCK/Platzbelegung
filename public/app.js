@@ -258,7 +258,7 @@ async function syncVenuesFromServer() {
   } catch (_) { /* ignore – server might not be running */ }
 }
 
-
+function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -411,14 +411,14 @@ function renderWeekView() {
 
     // Venue label cell
     const lbl = document.createElement('div');
-    lbl.className = 'wg-venue-label';
+    lbl.className = 'wg-venue-label' + (i % 2 === 0 ? ' wg-row-even' : '');
     lbl.innerHTML = `<span class="dot" style="background:${color}"></span>${escapeHtml(venue.name)}`;
     grid.appendChild(lbl);
 
     // Day cells
     days.forEach(day => {
       const cell = document.createElement('div');
-      cell.className = 'wg-cell';
+      cell.className = 'wg-cell' + (i % 2 === 0 ? ' wg-row-even' : '');
 
       const dayGames = state.games.filter(g => {
         if (g.venueId !== venue.id) return false;
