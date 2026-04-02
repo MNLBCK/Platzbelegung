@@ -49,6 +49,95 @@ def filter_games_by_venues(
     return [g for g in games if g.venue_id in venue_id_set]
 
 
+def _normalize_venue_name(name: str) -> str:
+    """Normalisiert einen Ortsnamen für den Vergleich.
+
+    Wandelt in Kleinbuchstaben um, entfernt führende/nachfolgende Leerzeichen
+    und reduziert mehrfache Leerzeichen auf eines.
+    """
+    return re.sub(r"\s+", " ", name.strip().lower())
+
+
+def filter_games_by_venue_configs(
+    games: list[ScrapedGame],
+    venue_configs: list,
+) -> list[ScrapedGame]:
+    """Filtert Spiele nach Sportstätten-Konfigurationen (IDs, Aliases, Muster).
+
+    Ein Spiel wird aufgenommen, wenn mindestens eine dieser Bedingungen zutrifft:
+    - Die ``venue_id`` des Spiels stimmt mit der ``id`` in der Konfiguration überein.
+    - Der normalisierte ``venue_name`` des Spiels stimmt mit einem normalisierten
+      Alias aus der Konfiguration überein.
+    - Der ``venue_name`` des Spiels passt auf ein Regex-Muster (``name_patterns``).
+
+    Nicht gematchte Ortsnamen werden auf DEBUG-Ebene protokolliert.
+
+    Args:
+        games: Liste von ScrapedGame-Objekten.
+        venue_configs: Liste von :class:`~platzbelegung.config.VenueConfig`-Objekten.
+
+    Returns:
+        Gefilterte Liste der passenden Spiele.
+    """
+    if not venue_configs:
+        return games
+
+    # Patterns einmalig kompilieren
+    compiled: list[tuple] = []
+    for vc in venue_configs:
+        patterns = []
+        for pat in getattr(vc, "name_patterns", []):
+            try:
+                patterns.append(re.compile(pat, re.IGNORECASE))
+            except re.error as exc:
+                logger.warning("Ungültiges Regex-Muster '%s': %s", pat, exc)
+        compiled.append((vc, patterns))
+
+    matched: list[ScrapedGame] = []
+    unmatched_names: set[str] = set()
+
+    for game in games:
+        game_venue_id = game.venue_id
+        game_venue_name = game.venue_name
+        game_venue_norm = _normalize_venue_name(game_venue_name)
+        match_found = False
+
+        for vc, patterns in compiled:
+            # 1. ID-Vergleich
+            if getattr(vc, "id", "") and game_venue_id == vc.id:
+                match_found = True
+                break
+
+            # 2. Alias-Vergleich (normalisiert)
+            for alias in getattr(vc, "aliases", []):
+                if _normalize_venue_name(alias) == game_venue_norm:
+                    match_found = True
+                    break
+            if match_found:
+                break
+
+            # 3. Regex-Muster-Vergleich
+            for pat in patterns:
+                if pat.search(game_venue_name):
+                    match_found = True
+                    break
+            if match_found:
+                break
+
+        if match_found:
+            matched.append(game)
+        else:
+            unmatched_names.add(game_venue_name)
+
+    if unmatched_names:
+        logger.debug(
+            "Nicht gematchte Ortsnamen (nicht in Konfiguration): %s",
+            sorted(unmatched_names),
+        )
+
+    return matched
+
+
 def _safe_text(el: Optional[Tag]) -> str:
     """Gibt den Text eines Elements zurück oder einen leeren String."""
     return el.get_text(strip=True) if el else ""

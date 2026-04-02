@@ -70,6 +70,35 @@
           <button id="clear-venues-btn" class="btn btn-danger">Alle entfernen</button>
         </div>
       </div>
+
+      <!-- Venue alias / pattern editor (shown when editing a venue) -->
+      <div id="venue-editor" class="venue-editor hidden">
+        <h3>Platz bearbeiten: <span id="venue-editor-title"></span></h3>
+        <input type="hidden" id="venue-editor-id" />
+        <div class="editor-field">
+          <label for="venue-editor-name">Anzeigename</label>
+          <input type="text" id="venue-editor-name" placeholder="Platzname" />
+        </div>
+        <div class="editor-field">
+          <label for="venue-editor-aliases">Alias-Namen
+            <span class="hint-inline">(einer pro Zeile, exakter Vergleich)</span>
+          </label>
+          <textarea id="venue-editor-aliases" rows="3"
+            placeholder="GWV-Sportpark (Kunstrasen)&#10;Kunstrasen Hochberg"></textarea>
+        </div>
+        <div class="editor-field">
+          <label for="venue-editor-patterns">Regex-Muster
+            <span class="hint-inline">(einer pro Zeile, Python-Regex)</span>
+          </label>
+          <textarea id="venue-editor-patterns" rows="3"
+            placeholder="Kirchweinbergweg&#10;Kunstrasen.*Hochberg"></textarea>
+        </div>
+        <div class="editor-actions">
+          <button id="venue-editor-save" class="btn btn-primary">Speichern</button>
+          <button id="venue-editor-cancel" class="btn btn-secondary">Abbrechen</button>
+        </div>
+        <p id="venue-editor-status" class="editor-status hidden"></p>
+      </div>
     </section>
 
     <!-- Games Display -->
