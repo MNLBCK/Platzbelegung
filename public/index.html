@@ -23,6 +23,7 @@
 
       <div class="club-section">
         <h3>Verein auswählen</h3>
+        <div id="recent-clubs" class="recent-clubs hidden"></div>
         <div class="input-row">
           <input
             type="text"
@@ -33,7 +34,7 @@
           <button id="club-search-btn" class="btn btn-primary">Suchen</button>
         </div>
         <div id="club-search-results" class="search-results hidden"></div>
-        <p id="current-club-info" class="hint current-club hidden"></p>
+        <div id="current-club-info" class="current-club-display hidden"></div>
         <p class="hint">
           Vereinslink von fussball.de einfügen oder Vereinsnamen eingeben.<br />
           <code>https://www.fussball.de/verein/.../-/id/<strong>VEREINS-ID</strong></code>
@@ -42,9 +43,11 @@
 
       <div class="search-section">
         <h3>Zeitraum</h3>
-        <div class="input-row">
+        <div class="date-row">
           <input type="date" id="date-from-input" />
           <input type="date" id="date-to-input" />
+        </div>
+        <div class="action-row">
           <button id="load-games-btn" class="btn btn-primary">Spielplan laden</button>
           <button id="clear-club-btn" class="btn btn-secondary">Auswahl löschen</button>
         </div>
@@ -53,13 +56,8 @@
         </p>
       </div>
 
-      <div class="demo-section">
-        <button id="demo-btn" class="btn btn-secondary">Demo-Daten laden</button>
-        <span class="hint-inline">Zum Ausprobieren ohne fussball.de-Zugang</span>
-      </div>
-
       <div id="venues-list" class="venues-list">
-        <h3>Geladene Spielstätten</h3>
+        <h3>Legende Spielstätten</h3>
         <p id="no-venues-msg" class="empty-msg">Bitte zuerst einen Verein auswählen.</p>
         <div id="venue-summary" class="venue-summary"></div>
         <div id="load-controls" class="load-controls hidden"></div>
@@ -89,7 +87,9 @@
 
       <!-- Week view -->
       <div id="week-view" class="hidden">
-        <div class="week-grid" id="week-grid"></div>
+        <div class="week-grid-wrap">
+          <div class="week-grid" id="week-grid"></div>
+        </div>
       </div>
 
       <!-- List view -->

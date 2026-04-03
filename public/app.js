@@ -6,9 +6,12 @@ const state = {
   view: 'week',
   dateFrom: '',
   dateTo: '',
+  loadedFrom: '',
+  loadedTo: '',
 };
 
-const STORAGE_KEY = 'platzbelegung_state_v2';
+const STORAGE_KEY = 'platzbelegung_state_v3';
+const RECENT_CLUBS_KEY = 'platzbelegung_recent_clubs_v1';
 const VENUE_COLORS = [
   '#1565c0', '#6a1b9a', '#e65100', '#00695c',
   '#283593', '#558b2f', '#c62828', '#4527a0',
@@ -59,9 +62,11 @@ function formatInputDate(date) {
 }
 
 function getDefaultDateRange() {
+  const today = new Date();
+  const endOfNextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 0);
   return {
-    dateFrom: '2026-05-01',
-    dateTo: '2026-05-31',
+    dateFrom: formatInputDate(today),
+    dateTo: formatInputDate(endOfNextMonth),
   };
 }
 
@@ -92,6 +97,79 @@ function saveState() {
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
+
+// --- Recent clubs (last 3 used, stored in localStorage) ---
+
+function loadRecentClubs() {
+  try {
+    const raw = localStorage.getItem(RECENT_CLUBS_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveRecentClub(club) {
+  if (!club || !club.id) return;
+  let list = loadRecentClubs();
+  // Remove existing entry with same id
+  list = list.filter(c => c.id !== club.id);
+  // Add to front
+  list.unshift({ id: club.id, name: club.name || club.id, location: club.location || '', logoUrl: club.logoUrl || '' });
+  // Keep only last 3
+  list = list.slice(0, 3);
+  localStorage.setItem(RECENT_CLUBS_KEY, JSON.stringify(list));
+}
+
+function renderRecentClubs() {
+  const container = $('recent-clubs');
+  const list = loadRecentClubs();
+  if (!list.length) {
+    showEl(container, false);
+    return;
+  }
+  showEl(container, true);
+  container.innerHTML = `
+    <div class="recent-clubs-label">Zuletzt verwendet:</div>
+    <div class="recent-clubs-list">
+      ${list.map(club => `
+        <button class="recent-club-btn" type="button" data-club-id="${escapeHtml(club.id)}" title="${escapeHtml(club.name)}${club.location ? ' · ' + escapeHtml(club.location) : ''}">
+          <span class="recent-club-logo-wrap">
+            ${club.logoUrl
+              ? `<img class="recent-club-logo" src="${escapeHtml(club.logoUrl)}" alt="${escapeHtml(club.name)}" loading="lazy">`
+              : `<span class="recent-club-logo-fallback">${escapeHtml((club.name || '?').charAt(0).toUpperCase())}</span>`}
+          </span>
+          <span class="recent-club-name">${escapeHtml(club.name)}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  container.querySelectorAll('[data-club-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const club = list.find(c => c.id === button.dataset.clubId);
+      if (!club) return;
+      selectClub(club);
+    });
+  });
+}
+
+function selectClub(club) {
+  state.club = club;
+  saveState();
+  saveRecentClub(club);
+  renderSelectedClub();
+  renderVenueSummary();
+  renderRecentClubs();
+  $('club-search-input').value = club.name || '';
+  const resultsEl = $('club-search-results');
+  resultsEl.innerHTML = '';
+  showEl(resultsEl, false);
+}
+
+// --- Club display ---
 
 function getMonday(date) {
   const d = new Date(date);
@@ -129,17 +207,34 @@ function venueColor(venueId) {
   return VENUE_COLORS[idx % VENUE_COLORS.length] || '#607d8b';
 }
 
+function deriveShortVenueName(fullName) {
+  if (!fullName) return 'Unbekannt';
+  // Take the first comma-separated segment (venue type/name without address)
+  const parts = fullName.split(',');
+  let short = parts[0].trim();
+  if (short.length > 22) short = `${short.substring(0, 20)}…`;
+  return short;
+}
+
 function renderSelectedClub() {
   const infoEl = $('current-club-info');
   if (!state.club || !state.club.id) {
-    infoEl.textContent = '';
+    infoEl.innerHTML = '';
     showEl(infoEl, false);
     return;
   }
 
-  const parts = [state.club.name || state.club.id];
-  if (state.club.location) parts.push(state.club.location);
-  infoEl.textContent = `✓ Verein: ${parts.join(' · ')}`;
+  const nameParts = [state.club.name || state.club.id];
+  if (state.club.location) nameParts.push(state.club.location);
+  const label = nameParts.join(' · ');
+
+  infoEl.innerHTML = `
+    <span class="current-club-check">✓</span>
+    ${state.club.logoUrl
+      ? `<img class="current-club-logo" src="${escapeHtml(state.club.logoUrl)}" alt="${escapeHtml(state.club.name || '')}">`
+      : ''}
+    <span class="current-club-name">${escapeHtml(label)}</span>
+  `;
   showEl(infoEl, true);
 }
 
@@ -168,7 +263,8 @@ function renderVenueSummary() {
   summaryEl.innerHTML = state.venues.map((venue, index) => `
     <div class="venue-summary-item">
       <span class="venue-color-dot" style="background:${VENUE_COLORS[index % VENUE_COLORS.length]}"></span>
-      <span class="venue-name">${escapeHtml(venue.name)}</span>
+      <span class="venue-short-name">${escapeHtml(deriveShortVenueName(venue.name))}</span>
+      <span class="venue-full-name">${escapeHtml(venue.name)}</span>
     </div>
   `).join('');
 }
@@ -209,13 +305,7 @@ function renderClubSearchResults(clubs) {
     button.addEventListener('click', () => {
       const club = clubs.find((entry) => entry.id === button.dataset.clubId);
       if (!club) return;
-      state.club = club;
-      saveState();
-      renderSelectedClub();
-      renderVenueSummary();
-      $('club-search-input').value = club.name || '';
-      resultsEl.innerHTML = '';
-      showEl(resultsEl, false);
+      selectClub(club);
     });
   });
   showEl(resultsEl, true);
@@ -224,11 +314,8 @@ function renderClubSearchResults(clubs) {
 async function doClubSearch(query) {
   const directClubId = extractClubId(query);
   if (directClubId) {
-    state.club = { id: directClubId, name: query.trim() };
-    saveState();
-    renderSelectedClub();
-    renderVenueSummary();
-    showEl($('club-search-results'), false);
+    const club = { id: directClubId, name: query.trim() };
+    selectClub(club);
     return;
   }
 
@@ -263,7 +350,7 @@ async function syncClubFromServer() {
   }
 }
 
-async function loadGames(useDemo = false) {
+async function loadGames() {
   showError('');
   showLoading(true);
   showEl($('week-view'), false);
@@ -271,21 +358,18 @@ async function loadGames(useDemo = false) {
   showEl($('no-games-msg'), false);
 
   try {
-    let url = '/api/demo';
-    if (!useDemo) {
-      if (!state.club || !state.club.id) {
-        showError('Bitte zuerst einen Verein auswählen.');
-        return;
-      }
-      state.dateFrom = $('date-from-input').value;
-      state.dateTo = $('date-to-input').value;
-      if (!state.dateFrom || !state.dateTo) {
-        showError('Bitte Zeitraum vollständig angeben.');
-        return;
-      }
-      saveState();
-      url = `/api/club-matchplan?id=${encodeURIComponent(state.club.id)}&dateFrom=${encodeURIComponent(state.dateFrom)}&dateTo=${encodeURIComponent(state.dateTo)}&matchType=1&max=100`;
+    if (!state.club || !state.club.id) {
+      showError('Bitte zuerst einen Verein auswählen.');
+      return;
     }
+    state.dateFrom = $('date-from-input').value;
+    state.dateTo = $('date-to-input').value;
+    if (!state.dateFrom || !state.dateTo) {
+      showError('Bitte Zeitraum vollständig angeben.');
+      return;
+    }
+    saveState();
+    const url = `/api/club-matchplan?id=${encodeURIComponent(state.club.id)}&dateFrom=${encodeURIComponent(state.dateFrom)}&dateTo=${encodeURIComponent(state.dateTo)}&matchType=1&max=100`;
 
     const resp = await fetch(url);
     const data = await resp.json();
@@ -295,6 +379,8 @@ async function loadGames(useDemo = false) {
     }
 
     state.games = Array.isArray(data) ? data : [];
+    state.loadedFrom = state.dateFrom;
+    state.loadedTo = state.dateTo;
     state.venues = deriveVenuesFromGames(state.games);
     if (state.games.length > 0) {
       state.currentWeekStart = getMonday(new Date(state.games[0].startDate));
@@ -305,6 +391,72 @@ async function loadGames(useDemo = false) {
     showError(`Netzwerkfehler: ${err.message}`);
   } finally {
     showLoading(false);
+  }
+}
+
+async function extendDateRangeAndReload(newFrom, newTo) {
+  if (!state.club || !state.club.id) return;
+
+  showLoading(true);
+  try {
+    const url = `/api/club-matchplan?id=${encodeURIComponent(state.club.id)}&dateFrom=${encodeURIComponent(newFrom)}&dateTo=${encodeURIComponent(newTo)}&matchType=1&max=100`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!resp.ok) return;
+
+    const newGames = Array.isArray(data) ? data : [];
+    // Merge new games with existing, deduplicate by startDate + venueId + homeTeam
+    const gameKey = g => JSON.stringify([g.startDate, g.venueId, g.homeTeam]);
+    const existingKeys = new Set(state.games.map(gameKey));
+    const merged = [...state.games, ...newGames.filter(g => !existingKeys.has(gameKey(g)))];
+    merged.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+    state.games = merged;
+    state.loadedFrom = newFrom;
+    state.loadedTo = newTo;
+    state.dateFrom = newFrom;
+    state.dateTo = newTo;
+    $('date-from-input').value = newFrom;
+    $('date-to-input').value = newTo;
+    state.venues = deriveVenuesFromGames(state.games);
+    renderVenueSummary();
+    renderCurrentView();
+  } catch (_) {
+    // silent fail – user can still navigate
+  } finally {
+    showLoading(false);
+  }
+}
+
+function checkAndExtendRange(weekStart) {
+  if (!state.club || !state.club.id || !state.loadedFrom || !state.loadedTo) return;
+  const weekEnd = addDays(weekStart, 6);
+  const loadedFrom = new Date(state.loadedFrom);
+  const loadedTo = new Date(state.loadedTo);
+  loadedTo.setHours(23, 59, 59, 999);
+
+  let newFrom = state.loadedFrom;
+  let newTo = state.loadedTo;
+  let needsReload = false;
+
+  if (weekStart < loadedFrom) {
+    // Extend backwards by one month
+    const extended = new Date(weekStart);
+    extended.setMonth(extended.getMonth() - 1);
+    extended.setDate(1);
+    newFrom = formatInputDate(extended);
+    needsReload = true;
+  }
+  if (weekEnd > loadedTo) {
+    // Extend forwards to the end of the month following weekEnd
+    const extended = new Date(weekEnd);
+    extended.setMonth(extended.getMonth() + 2);
+    extended.setDate(0); // day 0 = last day of the preceding month (month+1 from weekEnd)
+    newTo = formatInputDate(extended);
+    needsReload = true;
+  }
+  if (needsReload) {
+    extendDateRangeAndReload(newFrom, newTo);
   }
 }
 
@@ -324,7 +476,7 @@ function renderWeekView() {
 
   const grid = $('week-grid');
   grid.innerHTML = '';
-  grid.style.gridTemplateColumns = '80px repeat(7, 1fr)';
+  grid.style.gridTemplateColumns = '56px repeat(7, 1fr)';
 
   const corner = document.createElement('div');
   corner.className = 'wg-header-corner';
@@ -333,7 +485,7 @@ function renderWeekView() {
   days.forEach((d) => {
     const hd = document.createElement('div');
     hd.className = `wg-day-header${isSameDay(d, today) ? ' today' : ''}`;
-    hd.textContent = fmtShort(d);
+    hd.innerHTML = `<span class="wg-day-short">${DE_DAYS[d.getDay()]}</span><span class="wg-day-date">${d.getDate()}.${DE_MONTHS[d.getMonth()]}</span>`;
     grid.appendChild(hd);
   });
 
@@ -348,9 +500,10 @@ function renderWeekView() {
 
   state.venues.forEach((venue, index) => {
     const color = VENUE_COLORS[index % VENUE_COLORS.length];
+    const shortName = deriveShortVenueName(venue.name);
     const label = document.createElement('div');
     label.className = `wg-venue-label${index % 2 === 0 ? ' wg-row-even' : ''}`;
-    label.innerHTML = `<span class="dot" style="background:${color}"></span>${escapeHtml(venue.name)}`;
+    label.innerHTML = `<span class="dot" style="background:${color}"></span><span class="wg-venue-text" title="${escapeHtml(venue.name)}">${escapeHtml(shortName)}</span>`;
     grid.appendChild(label);
 
     days.forEach((day) => {
@@ -419,16 +572,21 @@ function renderListView() {
     group.innerHTML = `<div class="day-group-header">${escapeHtml(label)}</div>`;
 
     games.forEach((game) => {
+      const color = venueColor(game.venueId);
+      const shortVenue = deriveShortVenueName(game.venueName || '');
       const item = document.createElement('div');
       item.className = 'game-list-item';
       item.innerHTML = `
         <span class="gli-time">${escapeHtml(game.time || '--:--')}</span>
         <span class="gli-venue">
-          <span class="dot" style="background:${venueColor(game.venueId)}"></span>
-          ${escapeHtml(game.venueName || 'Unbekannte Spielstätte')}
+          <span class="dot" style="background:${color}"></span>
+          <span title="${escapeHtml(game.venueName || '')}">${escapeHtml(shortVenue)}</span>
         </span>
-        <span class="gli-match">${escapeHtml(game.homeTeam)}</span>
-        <span class="gli-vs">vs. ${escapeHtml(game.guestTeam)}</span>
+        <span class="gli-teams">
+          <span class="gli-home">${escapeHtml(game.homeTeam)}</span>
+          <span class="gli-vs">vs.</span>
+          <span class="gli-guest">${escapeHtml(game.guestTeam)}</span>
+        </span>
         <span class="gli-comp">${escapeHtml(game.competition || '')}</span>
       `;
       group.appendChild(item);
@@ -464,12 +622,13 @@ function bindEvents() {
     }
   });
 
-  $('load-games-btn').addEventListener('click', () => loadGames(false));
-  $('demo-btn').addEventListener('click', () => loadGames(true));
+  $('load-games-btn').addEventListener('click', () => loadGames());
   $('clear-club-btn').addEventListener('click', () => {
     state.club = null;
     state.games = [];
     state.venues = [];
+    state.loadedFrom = '';
+    state.loadedTo = '';
     saveState();
     renderSelectedClub();
     renderVenueSummary();
@@ -485,10 +644,12 @@ function bindEvents() {
   $('view-list-btn').addEventListener('click', () => switchView('list'));
   $('prev-week-btn').addEventListener('click', () => {
     state.currentWeekStart = addDays(state.currentWeekStart, -7);
+    checkAndExtendRange(state.currentWeekStart);
     renderCurrentView();
   });
   $('next-week-btn').addEventListener('click', () => {
     state.currentWeekStart = addDays(state.currentWeekStart, 7);
+    checkAndExtendRange(state.currentWeekStart);
     renderCurrentView();
   });
   $('today-btn').addEventListener('click', () => {
@@ -505,6 +666,7 @@ async function init() {
   state.currentWeekStart = getMonday(new Date());
   renderSelectedClub();
   renderVenueSummary();
+  renderRecentClubs();
   bindEvents();
   switchView(state.view);
 }
