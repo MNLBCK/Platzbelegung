@@ -609,7 +609,7 @@ function renderWeekView() {
 
   const grid = $('week-grid');
   grid.innerHTML = '';
-  grid.style.gridTemplateColumns = '56px repeat(7, 1fr)';
+  grid.style.gridTemplateColumns = '48px repeat(7, minmax(0, 1fr))';
 
   const corner = document.createElement('div');
   corner.className = 'wg-header-corner';
@@ -656,6 +656,7 @@ function renderWeekView() {
         const chip = document.createElement('div');
         chip.className = 'game-chip';
         chip.style.background = color;
+        chip.title = (game.time || '') + ' ' + game.homeTeam + ' \u2013 ' + game.guestTeam + (game.competition ? ' | ' + game.competition : '');
         chip.innerHTML =
           '<div class="chip-time">' + escapeHtml(game.time || '') + '</div>' +
           '<div class="chip-match">' + escapeHtml(game.homeTeam) + ' \u2013 ' + escapeHtml(game.guestTeam) + '</div>' +
