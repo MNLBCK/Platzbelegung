@@ -489,6 +489,10 @@ main {
   background: var(--primary-l);
   transform: translateY(-1px);
 }
+.recent-club-btn--active {
+  border-color: var(--primary);
+  background: var(--primary-l);
+}
 .recent-club-logo-wrap {
   width: 40px;
   height: 40px;

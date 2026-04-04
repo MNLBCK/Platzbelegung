@@ -341,7 +341,7 @@ function renderRecentClubs() {
     '<div class="recent-clubs-label">Zuletzt verwendet:</div>' +
     '<div class="recent-clubs-list">' +
     list.map(club =>
-      '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="' + escapeHtml(club.name) + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
+      '<button class="recent-club-btn' + (state.club && state.club.id === club.id ? ' recent-club-btn--active' : '') + '" type="button" data-club-id="' + escapeHtml(club.id) + '" title="' + escapeHtml(club.name) + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
       '<span class="recent-club-logo-wrap">' +
       (club.logoUrl
         ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
@@ -374,26 +374,7 @@ function selectClub(club) {
   autoLoadGames();
 }
 
-function renderSelectedClub() {
-  const infoEl = $('current-club-info');
-  if (!state.club || !state.club.id) {
-    infoEl.innerHTML = '';
-    showEl(infoEl, false);
-    return;
-  }
-  const nameParts = [state.club.name || state.club.id];
-  if (state.club.location) nameParts.push(state.club.location);
-  const label = nameParts.join(' \u00b7 ');
-  infoEl.innerHTML =
-    '<span class="current-club-check">\u2713</span>' +
-    (state.club.logoUrl
-      ? '<img class="current-club-logo" src="' + escapeHtml(state.club.logoUrl) + '" alt="' + escapeHtml(state.club.name || '') + '">'
-      : '') +
-    '<span class="current-club-name">' + escapeHtml(label) + '</span>' +
-    '<button class="btn btn-sm btn-secondary clear-club-inline" type="button" aria-label="Verein entfernen">\u2715</button>';
-  showEl(infoEl, true);
-  infoEl.querySelector('.clear-club-inline').addEventListener('click', clearClub);
-}
+function renderSelectedClub() {}
 
 function clearClub() {
   state.club = null;
