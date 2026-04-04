@@ -139,24 +139,26 @@ body {
   gap: 0.35rem;
 }
 .venues-map-links {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.5rem;
+  display: none;
 }
 .venue-map-link {
+  display: none;
+}
+.venue-map-icon {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.82rem;
+  justify-content: center;
+  margin-left: auto;
+  font-size: 1rem;
   color: var(--primary-d);
   text-decoration: none;
-  padding: 0.25rem 0.5rem;
+  padding: 0.1rem 0.2rem;
   border-radius: 4px;
   transition: background 0.12s;
-  width: fit-content;
+  flex-shrink: 0;
+  line-height: 1;
 }
-.venue-map-link:hover { background: var(--primary-l); text-decoration: underline; }
+.venue-map-icon:hover { background: var(--primary-l); }
 .venue-checkbox-item {
   display: flex;
   align-items: center;
@@ -639,11 +641,11 @@ main {
   display: flex;
   align-items: stretch;
   gap: 0;
-  flex-shrink: 0;
+  width: 100%;
+  margin-top: 0.5rem;
 }
 .view-controls .btn {
-  flex: 1 1 50%;
-  min-width: 5rem;
+  flex: 1;
 }
 .nav-controls {
   display: flex;
