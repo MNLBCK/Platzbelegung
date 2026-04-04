@@ -55,6 +55,22 @@ const VENUE_COLORS = [
   '#0277bd', '#2e7d32',
 ];
 
+// Colors per youth/team category (German football classification)
+const TEAM_CATEGORY_COLORS = {
+  'A-Junioren': '#c62828',
+  'B-Junioren': '#e65100',
+  'C-Junioren': '#f9a825',
+  'D-Junioren': '#558b2f',
+  'E-Junioren': '#00695c',
+  'F-Junioren': '#0277bd',
+  'G-Junioren': '#6a1b9a',
+  'Bambini':    '#4527a0',
+  'Herren':     '#1565c0',
+  'Damen':      '#c2185b',
+  'Senioren':   '#455a64',
+  'Sonstige':   '#607d8b',
+};
+
 const DE_DAYS       = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 const DE_DAYS_LONG  = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 const DE_MONTHS     = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
@@ -193,6 +209,57 @@ function isVenueSelected(venueId) {
 
 function getVisibleVenues() {
   return state.venues.filter(v => isVenueSelected(v.id));
+}
+
+// ===================== Team Category Helpers =====================
+
+function deriveTeamCategory(game) {
+  const text = (game.competition || '') + ' ' + (game.homeTeam || '');
+  if (/\bBambini\b/i.test(text)) return 'Bambini';
+  const junioren = text.match(/\b([A-G])[-\s]Junior(?:en|innen)\b/i);
+  if (junioren) return junioren[1].toUpperCase() + '-Junioren';
+  const u = text.match(/\bU\s*(\d+)\b/i);
+  if (u) {
+    const age = parseInt(u[1], 10);
+    if (age <= 7)  return 'G-Junioren';
+    if (age <= 9)  return 'F-Junioren';
+    if (age <= 11) return 'E-Junioren';
+    if (age <= 13) return 'D-Junioren';
+    if (age <= 15) return 'C-Junioren';
+    if (age <= 17) return 'B-Junioren';
+    if (age <= 19) return 'A-Junioren';
+  }
+  if (/\bHerren\b/i.test(text))   return 'Herren';
+  if (/\bDamen\b/i.test(text))    return 'Damen';
+  if (/\bSenioren\b/i.test(text)) return 'Senioren';
+  return 'Sonstige';
+}
+
+function teamCategoryColor(game) {
+  const cat = deriveTeamCategory(game);
+  return TEAM_CATEGORY_COLORS[cat] || TEAM_CATEGORY_COLORS['Sonstige'];
+}
+
+// Returns the opponent's name: tries to detect which team belongs to our club
+function getOpponent(game) {
+  if (!state.club) return game.guestTeam || '';
+  const clubName = (state.club.name || '').toLowerCase();
+  if (!clubName) return game.guestTeam || '';
+  const htLow = (game.homeTeam  || '').toLowerCase();
+  const gtLow = (game.guestTeam || '').toLowerCase();
+  // Full club name substring match (works when club name ≥ several chars)
+  if (clubName.length >= 4) {
+    if (htLow.includes(clubName)) return game.guestTeam || '';
+    if (gtLow.includes(clubName)) return game.homeTeam  || '';
+  }
+  // Fallback: use first word longer than 2 chars with word-boundary matching
+  const key = clubName.split(/\s+/).find(w => w.length > 2);
+  if (key) {
+    const wordRe = new RegExp('(?:^|\\s)' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\s|$)');
+    if (wordRe.test(htLow)) return game.guestTeam || '';
+    if (wordRe.test(gtLow)) return game.homeTeam  || '';
+  }
+  return game.guestTeam || '';
 }
 
 // ===================== Cookie Persistence =====================
@@ -601,20 +668,17 @@ function renderWeekView() {
   const today     = new Date();
   const weekEnd   = days[6];
 
+  // Compact label to avoid nav-controls overflow
   $('current-period-label').textContent =
     'KW\u00a0' + getISOWeek(weekStart) +
-    ' \u00b7 ' + days[0].getDate() + '.\u00a0' + DE_MONTHS[days[0].getMonth()] +
-    ' \u2013 ' + weekEnd.getDate() + '.\u00a0' + DE_MONTHS[weekEnd.getMonth()] +
-    '\u00a0' + weekEnd.getFullYear();
+    '\u2002' + days[0].getDate() + '.' + DE_MONTHS[days[0].getMonth()] +
+    '\u2013' + weekEnd.getDate() + '.' + DE_MONTHS[weekEnd.getMonth()];
 
   const grid = $('week-grid');
   grid.innerHTML = '';
-  grid.style.gridTemplateColumns = '48px repeat(7, minmax(0, 1fr))';
+  grid.style.gridTemplateColumns = 'repeat(7, minmax(0, 1fr))';
 
-  const corner = document.createElement('div');
-  corner.className = 'wg-header-corner';
-  grid.appendChild(corner);
-
+  // 7 day header cells (no corner cell)
   days.forEach(d => {
     const hd = document.createElement('div');
     hd.className = 'wg-day-header' + (isSameDay(d, today) ? ' today' : '');
@@ -633,16 +697,19 @@ function renderWeekView() {
 
   showEl($('no-games-msg'), false);
 
+  const weekGames = [];
+
   visibleVenues.forEach((venue, index) => {
     const colorIndex = state.venues.findIndex(v => v.id === venue.id);
-    const color      = VENUE_COLORS[colorIndex % VENUE_COLORS.length];
-    const shortName  = deriveShortVenueName(venue.name);
-    const label      = document.createElement('div');
-    label.className  = 'wg-venue-label' + (index % 2 === 0 ? ' wg-row-even' : '');
-    label.innerHTML  =
-      '<span class="dot" style="background:' + color + '"></span>' +
-      '<span class="wg-venue-text" title="' + escapeHtml(venue.name) + '">' + escapeHtml(shortName) + '</span>';
-    grid.appendChild(label);
+    const vColor     = VENUE_COLORS[colorIndex % VENUE_COLORS.length];
+
+    // Full-width venue name header spanning all 7 columns
+    const rowHeader = document.createElement('div');
+    rowHeader.className = 'wg-venue-row-header' + (index % 2 === 0 ? ' wg-row-even' : '');
+    rowHeader.innerHTML =
+      '<span class="dot" style="background:' + vColor + '"></span>' +
+      '<span class="wg-venue-text" title="' + escapeHtml(venue.name) + '">' + escapeHtml(venue.name) + '</span>';
+    grid.appendChild(rowHeader);
 
     days.forEach(day => {
       const cell = document.createElement('div');
@@ -653,20 +720,30 @@ function renderWeekView() {
         .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
 
       dayGames.forEach(game => {
+        weekGames.push(game);
         const chip = document.createElement('div');
         chip.className = 'game-chip';
-        chip.style.background = color;
+        const catColor = teamCategoryColor(game);
+        chip.style.background = catColor;
         chip.title = (game.time || '') + ' ' + game.homeTeam + ' \u2013 ' + game.guestTeam + (game.competition ? ' | ' + game.competition : '');
+        const opponent = getOpponent(game);
         chip.innerHTML =
           '<div class="chip-time">' + escapeHtml(game.time || '') + '</div>' +
-          '<div class="chip-match">' + escapeHtml(game.homeTeam) + ' \u2013 ' + escapeHtml(game.guestTeam) + '</div>' +
+          '<div class="chip-match">' + escapeHtml(opponent) + '</div>' +
           '<div class="chip-comp">' + escapeHtml(game.competition || '') + '</div>';
+        chip.addEventListener('click', () => showGameModal(game));
         cell.appendChild(chip);
       });
 
       grid.appendChild(cell);
     });
   });
+
+  // Legend for team categories visible in this week
+  const weekView = $('week-view');
+  const existingLegend = weekView.querySelector('.team-legend');
+  if (existingLegend) existingLegend.remove();
+  renderLegend(weekGames, weekView);
 }
 
 function renderMonthView() {
@@ -699,6 +776,9 @@ function renderMonthView() {
   }
 
   showEl($('no-games-msg'), false);
+
+  // Legend for team categories visible in this month (at top)
+  renderLegend(monthGames, listEl);
 
   // Group by ISO week
   const byWeek = new Map();
@@ -734,28 +814,118 @@ function renderMonthView() {
 
       dayGames.forEach(game => {
         const vid      = deriveVenueId(game);
-        const color    = venueColor(vid);
+        const vColor   = venueColor(vid);
+        const catColor = teamCategoryColor(game);
         const shortV   = deriveShortVenueName(game.venueName || '');
+        const opponent = getOpponent(game);
         const item     = document.createElement('div');
         item.className = 'game-list-item';
+        item.style.borderLeft = '4px solid ' + catColor;
+        item.style.cursor = 'pointer';
         item.innerHTML =
           '<span class="gli-time">' + escapeHtml(game.time || '--:--') + '</span>' +
           '<span class="gli-venue">' +
-            '<span class="dot" style="background:' + color + '"></span>' +
+            '<span class="dot" style="background:' + vColor + '"></span>' +
             '<span title="' + escapeHtml(game.venueName || '') + '">' + escapeHtml(shortV) + '</span>' +
           '</span>' +
           '<span class="gli-teams">' +
-            '<span class="gli-home">' + escapeHtml(game.homeTeam) + '</span>' +
-            '<span class="gli-vs">vs.</span>' +
-            '<span class="gli-guest">' + escapeHtml(game.guestTeam) + '</span>' +
+            '<span class="gli-opponent">' + escapeHtml(opponent) + '</span>' +
           '</span>' +
-          '<span class="gli-comp">' + escapeHtml(game.competition || '') + '</span>';
+          '<span class="gli-comp" style="color:' + catColor + ';font-weight:600">' + escapeHtml(game.competition || '') + '</span>';
+        item.addEventListener('click', () => showGameModal(game));
         group.appendChild(item);
       });
 
       listEl.appendChild(group);
     });
   });
+}
+
+// ===================== Legend =====================
+
+function renderLegend(games, container) {
+  const categories = new Map();
+  games.forEach(game => {
+    const cat = deriveTeamCategory(game);
+    if (!categories.has(cat)) {
+      categories.set(cat, TEAM_CATEGORY_COLORS[cat] || TEAM_CATEGORY_COLORS['Sonstige']);
+    }
+  });
+  if (!categories.size) return;
+  const legend = document.createElement('div');
+  legend.className = 'team-legend';
+  legend.innerHTML =
+    '<span class="legend-label">Legende:</span>' +
+    Array.from(categories.entries()).map(([cat, color]) =>
+      '<span class="legend-item">' +
+        '<span class="legend-dot" style="background:' + color + '"></span>' +
+        escapeHtml(cat) +
+      '</span>'
+    ).join('');
+  container.appendChild(legend);
+}
+
+// ===================== Game Modal =====================
+
+function showGameModal(game) {
+  const existing = document.getElementById('game-modal-overlay');
+  if (existing) existing.remove();
+
+  const category = deriveTeamCategory(game);
+  const catColor = TEAM_CATEGORY_COLORS[category] || TEAM_CATEGORY_COLORS['Sonstige'];
+  const MAPS_BASE = 'https://www.google.com/maps/search/?api=1&query=';
+  const venueMapUrl = game.venueName ? MAPS_BASE + encodeURIComponent(game.venueName) : '';
+  // Safety check: only use link when URL starts with the expected Google Maps prefix
+  const safeMapsUrl = venueMapUrl.startsWith(MAPS_BASE) ? venueMapUrl : '';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'game-modal-overlay';
+  overlay.className = 'game-modal-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+
+  overlay.innerHTML =
+    '<div class="game-modal">' +
+      '<div class="game-modal-header" style="background:' + catColor + '">' +
+        '<span class="game-modal-category">' + escapeHtml(category) + '</span>' +
+        '<button class="game-modal-close" aria-label="Schlie\u00dfen">&times;</button>' +
+      '</div>' +
+      '<div class="game-modal-body">' +
+        '<div class="game-modal-teams">' +
+          '<span class="game-modal-home">' + escapeHtml(game.homeTeam) + '</span>' +
+          '<span class="game-modal-vs">vs.</span>' +
+          '<span class="game-modal-guest">' + escapeHtml(game.guestTeam) + '</span>' +
+        '</div>' +
+        '<div class="game-modal-meta">' +
+          '<div class="game-modal-meta-row">\uD83D\uDCC5\u2002' + escapeHtml(fmtFull(new Date(game.startDate))) + '</div>' +
+          '<div class="game-modal-meta-row">\uD83D\uDD50\u2002' + escapeHtml(game.time || '--:--') + ' Uhr</div>' +
+          (game.competition ? '<div class="game-modal-meta-row">\uD83C\uDFC6\u2002' + escapeHtml(game.competition) + '</div>' : '') +
+          (game.venueName
+            ? '<div class="game-modal-meta-row">' +
+                (safeMapsUrl
+                  ? '<a class="game-modal-maps-link" href="' + escapeHtml(safeMapsUrl) + '" target="_blank" rel="noopener noreferrer">' +
+                      '\uD83D\uDCCD\u2002' + escapeHtml(game.venueName) + '</a>'
+                  : '\uD83D\uDCCD\u2002' + escapeHtml(game.venueName)) +
+              '</div>'
+            : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.remove();
+  });
+  overlay.querySelector('.game-modal-close').addEventListener('click', () => overlay.remove());
+
+  const escHandler = e => {
+    if (e.key === 'Escape') {
+      overlay.remove();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+
+  document.body.appendChild(overlay);
 }
 
 // ===================== View Switching & Navigation =====================
