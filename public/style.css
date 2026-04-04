@@ -529,6 +529,71 @@ main {
   width: 100%;
 }
 
+/* Selected club info card */
+.selected-club-info {
+  margin-top: 0.8rem;
+}
+.selected-club-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--primary-l);
+  border: 2px solid var(--primary);
+  border-radius: var(--radius);
+}
+.selected-club-logo-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+}
+.selected-club-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+.selected-club-logo-fallback {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--white);
+  font-weight: 700;
+  font-size: 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.selected-club-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.selected-club-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--primary-d);
+  word-break: break-word;
+}
+.selected-club-location {
+  font-size: 0.82rem;
+  color: var(--text-light);
+}
+.selected-club-link {
+  font-size: 0.75rem;
+}
+.selected-club-link a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.selected-club-link a:hover {
+  text-decoration: underline;
+}
+
 /* Venues List / Legend */
 .venues-list h3 { margin-bottom: 0.6rem; }
 .venues-list ul { list-style: none; margin-bottom: 0.8rem; }
@@ -806,16 +871,15 @@ main {
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
   font-size: 0.78rem;
-  color: var(--text);
+  font-weight: 600;
+  color: var(--white);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15);
 }
 .legend-dot {
-  width: 18px;
-  height: 14px;
-  border-radius: 3px;
-  flex-shrink: 0;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  display: none;
 }
 
 /* Game detail modal */
