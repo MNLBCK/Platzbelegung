@@ -477,6 +477,7 @@ function renderSelectedClub() {
     ? '<img class="selected-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
     : '<span class="selected-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>';
   el.innerHTML =
+    '<div class="selected-club-label">Ausgewählter Verein</div>' +
     '<div class="selected-club-card">' +
       '<div class="selected-club-logo-wrap">' + logoHtml + '</div>' +
       '<div class="selected-club-details">' +
