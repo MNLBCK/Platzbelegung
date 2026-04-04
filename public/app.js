@@ -374,7 +374,25 @@ function selectClub(club) {
   autoLoadGames();
 }
 
-function renderSelectedClub() {}
+function renderSelectedClub() {
+  const el = $('selected-club-info');
+  if (!el) return;
+  const club = state.club;
+  if (!club) { showEl(el, false); el.innerHTML = ''; return; }
+  const logoHtml = club.logoUrl
+    ? '<img class="selected-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
+    : '<span class="selected-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>';
+  el.innerHTML =
+    '<div class="selected-club-card">' +
+      '<div class="selected-club-logo-wrap">' + logoHtml + '</div>' +
+      '<div class="selected-club-details">' +
+        '<div class="selected-club-name">' + escapeHtml(club.name) + '</div>' +
+        (club.location ? '<div class="selected-club-location">' + escapeHtml(club.location) + '</div>' : '') +
+        (club.url ? '<div class="selected-club-link"><a href="' + escapeHtml(club.url) + '" target="_blank" rel="noopener noreferrer">fussball.de &#8599;</a></div>' : '') +
+      '</div>' +
+    '</div>';
+  showEl(el, true);
+}
 
 function clearClub() {
   state.club = null;
@@ -889,8 +907,7 @@ function renderLegend(games, container) {
   legend.innerHTML =
     '<span class="legend-label">Legende:</span>' +
     Array.from(categories.entries()).map(([cat, color]) =>
-      '<span class="legend-item">' +
-        '<span class="legend-dot" style="background:' + color + '"></span>' +
+      '<span class="legend-item" style="background:' + color + '">' +
         escapeHtml(cat) +
       '</span>'
     ).join('');
