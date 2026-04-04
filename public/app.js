@@ -262,6 +262,26 @@ function getOpponent(game) {
   return game.guestTeam || '';
 }
 
+// Returns the logo URL for the opponent team
+function getOpponentLogoUrl(game) {
+  if (!state.club) return game.guestLogoUrl || '';
+  const clubName = (state.club.name || '').toLowerCase();
+  if (!clubName) return game.guestLogoUrl || '';
+  const htLow = (game.homeTeam  || '').toLowerCase();
+  const gtLow = (game.guestTeam || '').toLowerCase();
+  if (clubName.length >= 4) {
+    if (htLow.includes(clubName)) return game.guestLogoUrl || '';
+    if (gtLow.includes(clubName)) return game.homeLogoUrl  || '';
+  }
+  const key = clubName.split(/\s+/).find(w => w.length > 2);
+  if (key) {
+    const wordRe = new RegExp('(?:^|\\s)' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\s|$)');
+    if (wordRe.test(htLow)) return game.guestLogoUrl || '';
+    if (wordRe.test(gtLow)) return game.homeLogoUrl  || '';
+  }
+  return game.guestLogoUrl || '';
+}
+
 // ===================== Cookie Persistence =====================
 
 function loadFromCookies() {
@@ -726,11 +746,30 @@ function renderWeekView() {
         const catColor = teamCategoryColor(game);
         chip.style.background = catColor;
         chip.title = (game.time || '') + ' ' + game.homeTeam + ' \u2013 ' + game.guestTeam + (game.competition ? ' | ' + game.competition : '');
-        const opponent = getOpponent(game);
-        chip.innerHTML =
-          '<div class="chip-time">' + escapeHtml(game.time || '') + '</div>' +
-          '<div class="chip-match">' + escapeHtml(opponent) + '</div>' +
-          '<div class="chip-comp">' + escapeHtml(game.competition || '') + '</div>';
+
+        const opponent    = getOpponent(game);
+        const logoUrl     = getOpponentLogoUrl(game);
+
+        if (logoUrl) {
+          const img = document.createElement('img');
+          img.className = 'chip-logo';
+          img.src = logoUrl;
+          img.alt = opponent;
+          img.loading = 'lazy';
+          img.addEventListener('error', () => img.remove());
+          chip.appendChild(img);
+        } else {
+          const fallback = document.createElement('span');
+          fallback.className = 'chip-logo-fallback';
+          fallback.textContent = (opponent || '?').charAt(0).toUpperCase();
+          chip.appendChild(fallback);
+        }
+
+        const timeEl = document.createElement('div');
+        timeEl.className = 'chip-time';
+        timeEl.textContent = game.time || '';
+        chip.appendChild(timeEl);
+
         chip.addEventListener('click', () => showGameModal(game));
         cell.appendChild(chip);
       });

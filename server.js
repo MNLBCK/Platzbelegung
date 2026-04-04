@@ -221,6 +221,20 @@ function parseClubMatchplanHtml(html) {
     if (!currentDate || !homeTeam) return;
     if (/^(spielfrei|bye)$/i.test(homeTeam) || /^(spielfrei|bye)$/i.test(guestTeam)) return;
 
+    // Extract club logo URLs: try direct img src first, then href-based club ID
+    function extractLogoUrl(cell) {
+      const imgSrc = $(cell).find('img').first().attr('src');
+      if (imgSrc) return toAbsoluteUrl(imgSrc);
+      const href = $(cell).find('.club-wrapper, a').first().attr('href') || '';
+      const idMatch = href.match(/\/id\/([^/?#]+)/);
+      if (idMatch) {
+        return `https://www.fussball.de/export.media/-/action/getLogo/format/7/id/${idMatch[1]}`;
+      }
+      return '';
+    }
+    const homeLogoUrl  = extractLogoUrl(clubCells[0]);
+    const guestLogoUrl = extractLogoUrl(clubCells[1]);
+
     const $venueRow = $row.nextAll('tr.row-venue').first();
     let venueName = '';
     if ($venueRow.length > 0) {
@@ -248,7 +262,9 @@ function parseClubMatchplanHtml(html) {
       date: formatGermanDate(parsedDate),
       time: currentTime,
       homeTeam,
+      homeLogoUrl,
       guestTeam,
+      guestLogoUrl,
       competition: currentCompetition,
       startDate: parsedDate.toISOString(),
     });
