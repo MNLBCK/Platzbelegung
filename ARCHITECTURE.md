@@ -2,6 +2,10 @@
 
 ## Data Source Strategy
 
+## API Runtime
+
+Die API wird über `backend.php` als PHP-Server bereitgestellt (`php -S 0.0.0.0:3210 backend.php`).
+
 ### Primary: Club Matchplan API
 
 The application primarily uses the **ajax.club.matchplan** API endpoint from fussball.de:
