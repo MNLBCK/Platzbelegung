@@ -629,6 +629,8 @@ function renderVenueCheckboxes() {
   showEl(emptyEl, false);
   showEl(cbEl, true);
 
+  const MAPS_BASE = 'https://www.google.com/maps/search/?api=1&query=';
+
   cbEl.innerHTML = state.venues.map((venue, index) => {
     const color   = VENUE_COLORS[index % VENUE_COLORS.length];
     const checked = isVenueSelected(venue.id) ? 'checked' : '';
@@ -642,6 +644,26 @@ function renderVenueCheckboxes() {
       '</label>'
     );
   }).join('');
+
+  // Add map links below the checkboxes
+  const existingLinks = cbEl.querySelector('.venues-map-links');
+  if (existingLinks) existingLinks.remove();
+  if (state.venues.length > 0) {
+    const linksDiv = document.createElement('div');
+    linksDiv.className = 'venues-map-links';
+    state.venues.forEach(venue => {
+      if (!venue.name) return;
+      const mapsUrl = MAPS_BASE + encodeURIComponent(venue.name);
+      const a = document.createElement('a');
+      a.className = 'venue-map-link';
+      a.href = mapsUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = '\uD83D\uDCCD\u2002' + venue.name;
+      linksDiv.appendChild(a);
+    });
+    if (linksDiv.childElementCount > 0) cbEl.appendChild(linksDiv);
+  }
 
   cbEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
@@ -688,11 +710,9 @@ function renderWeekView() {
   const today     = new Date();
   const weekEnd   = days[6];
 
-  // Compact label to avoid nav-controls overflow
+  // Label shows "KW XX · YYYY"
   $('current-period-label').textContent =
-    'KW\u00a0' + getISOWeek(weekStart) +
-    '\u2002' + days[0].getDate() + '.' + DE_MONTHS[days[0].getMonth()] +
-    '\u2013' + weekEnd.getDate() + '.' + DE_MONTHS[weekEnd.getMonth()];
+    'KW\u00a0' + getISOWeek(weekStart) + '\u2002' + weekStart.getFullYear();
 
   const grid = $('week-grid');
   grid.innerHTML = '';
@@ -756,7 +776,13 @@ function renderWeekView() {
           img.src = logoUrl;
           img.alt = opponent;
           img.loading = 'lazy';
-          img.addEventListener('error', () => img.remove());
+          img.addEventListener('error', () => {
+            img.remove();
+            const fb = document.createElement('span');
+            fb.className = 'chip-logo-fallback';
+            fb.textContent = (opponent || '?').charAt(0).toUpperCase();
+            chip.insertBefore(fb, chip.firstChild);
+          });
           chip.appendChild(img);
         } else {
           const fallback = document.createElement('span');
@@ -912,10 +938,6 @@ function showGameModal(game) {
 
   const category = deriveTeamCategory(game);
   const catColor = TEAM_CATEGORY_COLORS[category] || TEAM_CATEGORY_COLORS['Sonstige'];
-  const MAPS_BASE = 'https://www.google.com/maps/search/?api=1&query=';
-  const venueMapUrl = game.venueName ? MAPS_BASE + encodeURIComponent(game.venueName) : '';
-  // Safety check: only use link when URL starts with the expected Google Maps prefix
-  const safeMapsUrl = venueMapUrl.startsWith(MAPS_BASE) ? venueMapUrl : '';
 
   const overlay = document.createElement('div');
   overlay.id = 'game-modal-overlay';
@@ -939,14 +961,7 @@ function showGameModal(game) {
           '<div class="game-modal-meta-row">\uD83D\uDCC5\u2002' + escapeHtml(fmtFull(new Date(game.startDate))) + '</div>' +
           '<div class="game-modal-meta-row">\uD83D\uDD50\u2002' + escapeHtml(game.time || '--:--') + ' Uhr</div>' +
           (game.competition ? '<div class="game-modal-meta-row">\uD83C\uDFC6\u2002' + escapeHtml(game.competition) + '</div>' : '') +
-          (game.venueName
-            ? '<div class="game-modal-meta-row">' +
-                (safeMapsUrl
-                  ? '<a class="game-modal-maps-link" href="' + escapeHtml(safeMapsUrl) + '" target="_blank" rel="noopener noreferrer">' +
-                      '\uD83D\uDCCD\u2002' + escapeHtml(game.venueName) + '</a>'
-                  : '\uD83D\uDCCD\u2002' + escapeHtml(game.venueName)) +
-              '</div>'
-            : '') +
+          (game.venueName ? '<div class="game-modal-meta-row">\uD83D\uDCCD\u2002' + escapeHtml(game.venueName) + '</div>' : '') +
         '</div>' +
       '</div>' +
     '</div>';
