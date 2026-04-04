@@ -82,6 +82,7 @@ const state = {
   club: null,
   games: [],
   venues: [],
+  venueShortNames: {},
   selectedVenueIds: null,   // null = all; array = explicit selection
   currentWeekStart: null,
   currentMonth: null,
@@ -179,11 +180,104 @@ function venueColor(venueId) {
 }
 
 function deriveShortVenueName(fullName) {
-  if (!fullName) return 'Unbekannt';
-  const parts = fullName.split(',');
-  let short = parts[0].trim();
-  if (short.length > 22) short = short.substring(0, 20) + '\u2026';
-  return short;
+  const parts = splitVenueParts(fullName);
+  const base = parts[0] || 'Unbekannt';
+  return truncateShortName(base);
+}
+
+function splitVenueParts(fullName) {
+  return String(fullName || '')
+    .split(',')
+    .map(p => p.trim())
+    .filter(Boolean);
+}
+
+function truncateShortName(value, maxLen = 32) {
+  const text = String(value || '').trim();
+  if (!text) return 'Unbekannt';
+  return text.length <= maxLen ? text : text.slice(0, maxLen - 1) + '\u2026';
+}
+
+function pickDetailPart(parts, siblingParts) {
+  const rest = parts.slice(1);
+
+  const pitch = rest.find(p => /platz\s*\d+/i.test(p) || /\bplatz\b/i.test(p));
+  if (pitch) return pitch;
+
+  const stadium = rest.find(p => /(stadion|arena)/i.test(p));
+  if (stadium) return stadium;
+
+  for (let i = 1; i < parts.length; i++) {
+    const candidate = parts[i];
+    if (!candidate) continue;
+    if (siblingParts.some(sp => (sp[i] || '') !== candidate)) return candidate;
+  }
+
+  return rest.find(Boolean) || '';
+}
+
+function computeVenueShortNames(venues) {
+  const parsed = venues.map(v => {
+    const name = v.name || 'Unbekannte Spielstätte';
+    const parts = splitVenueParts(name);
+    return { id: v.id, name, parts };
+  });
+
+  const baseCounts = new Map();
+  parsed.forEach(p => {
+    const base = p.parts[0] || 'Unbekannt';
+    const key = base.toLowerCase();
+    baseCounts.set(key, (baseCounts.get(key) || 0) + 1);
+  });
+
+  const usedShort = new Set();
+  const result = new Map();
+
+  parsed.forEach(p => {
+    const base = p.parts[0] || 'Unbekannt';
+    const key = base.toLowerCase();
+    const needsDetail = (baseCounts.get(key) || 0) > 1;
+
+    let shortName = base;
+    if (needsDetail) {
+      const siblings = parsed
+        .filter(sp => (sp.parts[0] || 'Unbekannt') === base)
+        .map(sp => sp.parts);
+      const detail = pickDetailPart(p.parts, siblings);
+      if (detail) shortName = base + ' – ' + detail;
+    }
+
+    shortName = truncateShortName(shortName);
+
+    if (usedShort.has(shortName)) {
+      const altDetail = p.parts.slice(1).join(', ') || p.name;
+      shortName = truncateShortName(base + ' – ' + altDetail);
+    }
+
+    let suffix = 2;
+    while (usedShort.has(shortName)) {
+      shortName = truncateShortName(base + ' #' + suffix);
+      suffix += 1;
+    }
+
+    usedShort.add(shortName);
+    result.set(p.id, shortName);
+  });
+
+  return result;
+}
+
+function updateVenueShortNames() {
+  const map = computeVenueShortNames(state.venues || []);
+  state.venueShortNames = Object.fromEntries(map.entries());
+}
+
+function getVenueShortNameForGame(game) {
+  const vid = deriveVenueId(game);
+  if (state.venueShortNames && state.venueShortNames[vid]) {
+    return state.venueShortNames[vid];
+  }
+  return deriveShortVenueName(game.venueName || '');
 }
 
 function deriveVenueId(game) {
@@ -380,6 +474,7 @@ function clearClub() {
   state.club = null;
   state.games = [];
   state.venues = [];
+  state.venueShortNames = {};
   state.selectedVenueIds = null;
   state.loadedFrom = '';
   state.loadedTo = '';
@@ -460,6 +555,7 @@ async function autoLoadGames() {
     state.loadedFrom = session.loadedFrom;
     state.loadedTo = session.loadedTo;
     state.venues = deriveVenuesFromGames(state.games);
+    updateVenueShortNames();
     reconcileVenueSelection();
     renderVenueCheckboxes();
     renderCurrentView();
@@ -496,6 +592,7 @@ async function fetchGames(dateFrom, dateTo) {
     state.loadedFrom = dateFrom;
     state.loadedTo = dateTo;
     state.venues = deriveVenuesFromGames(state.games);
+    updateVenueShortNames();
     reconcileVenueSelection();
     saveSession();
     renderVenueCheckboxes();
@@ -532,6 +629,7 @@ async function extendDateRangeAndReload(newFrom, newTo) {
     state.loadedFrom = newFrom;
     state.loadedTo = newTo;
     state.venues = deriveVenuesFromGames(state.games);
+    updateVenueShortNames();
     reconcileVenueSelection();
     saveSession();
     renderVenueCheckboxes();
@@ -615,7 +713,7 @@ function renderVenueCheckboxes() {
   cbEl.innerHTML = state.venues.map((venue, index) => {
     const color   = VENUE_COLORS[index % VENUE_COLORS.length];
     const checked = isVenueSelected(venue.id) ? 'checked' : '';
-    const short   = deriveShortVenueName(venue.name);
+    const short   = state.venueShortNames[venue.id] || deriveShortVenueName(venue.name);
     const mapsUrl = MAPS_BASE + encodeURIComponent(venue.name);
     return (
       '<label class="venue-checkbox-item">' +
@@ -848,7 +946,7 @@ function renderMonthView() {
         const vid      = deriveVenueId(game);
         const vColor   = venueColor(vid);
         const catColor = teamCategoryColor(game);
-        const shortV   = deriveShortVenueName(game.venueName || '');
+        const shortV   = getVenueShortNameForGame(game);
         const opponent = getOpponent(game);
         const item     = document.createElement('div');
         item.className = 'game-list-item';
