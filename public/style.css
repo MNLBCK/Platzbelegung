@@ -617,11 +617,15 @@ main {
   gap: 0.4rem;
   flex-wrap: wrap;
 }
+.nav-controls { flex-wrap: nowrap; }
 .week-label {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--primary);
-  min-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
   text-align: center;
 }
 
@@ -634,7 +638,7 @@ main {
 /* Week Grid */
 .week-grid {
   display: grid;
-  grid-template-columns: 48px repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 2px;
   font-size: 0.82rem;
 }
@@ -662,28 +666,32 @@ main {
 .wg-day-short { font-weight: 800; font-size: 0.72rem; }
 .wg-day-date  { font-size: 0.64rem; opacity: 0.9; font-weight: 400; }
 
-.wg-venue-label {
+/* Full-width venue name header spanning all 7 grid columns */
+.wg-venue-row-header {
+  grid-column: 1 / -1;
   display: flex;
-  align-items: flex-start;
-  gap: 3px;
-  padding: 0.3rem 0.15rem;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--primary-l);
+  color: var(--primary-d);
+  font-size: 0.78rem;
   font-weight: 700;
-  font-size: 0.65rem;
-  color: var(--text);
-  border-right: 2px solid var(--border);
-  word-break: break-word;
-  line-height: 1.25;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  margin-top: 4px;
+  border-left: 3px solid var(--primary);
+  overflow: hidden;
 }
-.wg-venue-label .dot {
-  width: 7px;
-  height: 7px;
+.wg-venue-row-header .dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  margin-top: 2px;
 }
 .wg-venue-text {
   overflow: hidden;
-  word-break: break-word;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wg-cell {
@@ -700,29 +708,139 @@ main {
 
 .game-chip {
   border-radius: 4px;
-  padding: 0.22rem 0.3rem;
-  font-size: 0.68rem;
-  line-height: 1.25;
-  cursor: default;
+  padding: 0.2rem 0.25rem;
+  cursor: pointer;
   color: var(--white);
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 48px;
+  justify-content: center;
 }
-.game-chip .chip-time { font-weight: 700; }
-.game-chip .chip-match {
-  opacity: 0.95;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+.game-chip:hover { filter: brightness(1.12); }
+.chip-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.12);
+  display: block;
+  flex-shrink: 0;
+}
+.chip-logo-fallback {
+  width: 26px;
+  height: 26px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--white);
+  flex-shrink: 0;
+}
+.game-chip .chip-time { font-weight: 700; font-size: 0.68rem; text-align: center; line-height: 1.2; }
+/* Team category legend */
+.team-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.8rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  margin-top: 0.8rem;
+}
+.legend-label {
+  font-weight: 700;
+  color: var(--text-light);
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Game detail modal */
+.game-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+.game-modal {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  max-width: 460px;
+  width: 100%;
   overflow: hidden;
 }
-.game-chip .chip-comp {
-  font-size: 0.62rem;
-  opacity: 0.8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.game-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+  color: var(--white);
 }
+.game-modal-category {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.game-modal-close {
+  background: none;
+  border: none;
+  color: var(--white);
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.85;
+}
+.game-modal-close:hover { opacity: 1; }
+.game-modal-body { padding: 1rem; }
+.game-modal-teams {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+  margin-bottom: 0.8rem;
+  font-weight: 600;
+}
+.game-modal-vs { color: var(--text-light); font-weight: 400; }
+.game-modal-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  color: var(--text-light);
+}
+.game-modal-meta-row { line-height: 1.4; }
+.game-modal-maps-link {
+  color: var(--primary);
+  text-decoration: none;
+}
+.game-modal-maps-link:hover { text-decoration: underline; }
 
 /* List view */
 .day-group { margin-bottom: 1.2rem; }
@@ -765,6 +883,7 @@ main {
   min-width: 0;
 }
 .gli-home { font-weight: 600; }
+.gli-opponent { font-weight: 600; }
 .gli-vs { color: var(--text-light); font-size: 0.8rem; }
 .gli-guest { color: var(--text); }
 .gli-comp { color: var(--text-light); font-size: 0.78rem; white-space: nowrap; }
@@ -870,8 +989,9 @@ footer a { color: var(--primary); }
   .panel { padding: 1rem; }
 
   .panel-header { flex-direction: column; align-items: flex-start; }
-  .nav-controls { width: 100%; justify-content: space-between; }
-  .week-label { min-width: unset; font-size: 0.82rem; }
+  .nav-controls { width: 100%; justify-content: space-between; flex-wrap: nowrap; }
+  .week-label { font-size: 0.78rem; }
+  .date-picker-input { max-width: 110px; }
 
   .game-list-item {
     grid-template-columns: 46px 1fr;

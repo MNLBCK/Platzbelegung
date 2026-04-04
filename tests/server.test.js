@@ -159,9 +159,9 @@ describe('parseClubMatchplanHtml', () => {
           </tr>
           <tr class="odd">
             <td class="hidden-small"></td>
-            <td class="column-club"><a class="club-wrapper"><div class="club-name">SKV Hochberg</div></a></td>
+            <td class="column-club"><a class="club-wrapper" href="/verein/skv-hochberg/-/id/HOMECLUBID123#!/"><div class="club-name">SKV Hochberg</div></a></td>
             <td class="column-colon">:</td>
-            <td class="column-club no-border"><a class="club-wrapper"><div class="club-name">VfB Neckarrems 1913 e.V.</div></a></td>
+            <td class="column-club no-border"><a class="club-wrapper" href="/verein/vfb-neckarrems/-/id/GUESTCLUBID456#!/"><div class="club-name">VfB Neckarrems 1913 e.V.</div></a></td>
             <td class="column-score"></td>
             <td class="column-detail"></td>
           </tr>
@@ -182,7 +182,9 @@ describe('parseClubMatchplanHtml', () => {
       date: '10.05.2026',
       time: '15:00',
       homeTeam: 'SKV Hochberg',
+      homeLogoUrl: 'https://www.fussball.de/export.media/-/action/getLogo/format/7/id/HOMECLUBID123',
       guestTeam: 'VfB Neckarrems 1913 e.V.',
+      guestLogoUrl: 'https://www.fussball.de/export.media/-/action/getLogo/format/7/id/GUESTCLUBID456',
       competition: 'Herren | Kreisliga A; Kreisliga',
     }));
     expect(new Date(games[0].startDate).toString()).not.toBe('Invalid Date');
@@ -207,9 +209,9 @@ describe('GET /api/club-matchplan', () => {
           </tr>
           <tr>
             <td class="hidden-small"></td>
-            <td class="column-club"><a class="club-wrapper"><div class="club-name">SKV Hochberg</div></a></td>
+            <td class="column-club"><a class="club-wrapper" href="/verein/skv-hochberg/-/id/HOMECLUBID123#!/"><div class="club-name">SKV Hochberg</div></a></td>
             <td class="column-colon">:</td>
-            <td class="column-club no-border"><a class="club-wrapper"><div class="club-name">VfB Neckarrems 1913 e.V.</div></a></td>
+            <td class="column-club no-border"><a class="club-wrapper" href="/verein/vfb-neckarrems/-/id/GUESTCLUBID456#!/"><div class="club-name">VfB Neckarrems 1913 e.V.</div></a></td>
             <td class="column-score"></td>
             <td class="column-detail"></td>
           </tr>
