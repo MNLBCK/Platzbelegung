@@ -490,8 +490,8 @@ main {
   transform: translateY(-1px);
 }
 .recent-club-btn--active {
-  border-color: var(--primary);
-  background: var(--primary-l);
+  border-color: var(--border);
+  background: var(--white);
 }
 .recent-club-logo-wrap {
   width: 40px;
@@ -533,13 +533,19 @@ main {
 .selected-club-info {
   margin-top: 0.8rem;
 }
+.selected-club-label {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  margin-bottom: 0.4rem;
+  font-weight: 500;
+}
 .selected-club-card {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: var(--primary-l);
-  border: 2px solid var(--primary);
+  background: var(--white);
+  border: 2px solid var(--border);
   border-radius: var(--radius);
 }
 .selected-club-logo-wrap {
