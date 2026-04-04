@@ -11,72 +11,66 @@
     <div class="header-inner">
       <div class="header-title">
         <h1>⚽ Platzbelegung</h1>
-        <p class="header-sub">Übersicht der Spielbelegung auf Sportplätzen (Quelle: fussball.de)</p>
       </div>
     </div>
   </header>
 
   <main>
-    <!-- Club Configuration Panel -->
-    <section class="panel" id="config-panel">
-      <h2>Vereinsspielplan laden</h2>
-
-      <div class="club-section">
-        <h3>Verein auswählen</h3>
-        <div id="recent-clubs" class="recent-clubs hidden"></div>
-        <div class="input-row">
-          <input
-            type="text"
-            id="club-search-input"
-            placeholder="Vereinsname oder fussball.de Verein-Link…"
-            autocomplete="off"
-          />
-          <button id="club-search-btn" class="btn btn-primary">Suchen</button>
-        </div>
-        <div id="club-search-results" class="search-results hidden"></div>
-        <div id="current-club-info" class="current-club-display hidden"></div>
-        <p class="hint">
-          Vereinslink von fussball.de einfügen oder Vereinsnamen eingeben.<br />
-          <code>https://www.fussball.de/verein/.../-/id/<strong>VEREINS-ID</strong></code>
-        </p>
+    <!-- Section 1: Verein -->
+    <section class="panel section-step" id="section-verein">
+      <h2 class="section-title">
+        <span class="section-num">1</span> Verein
+        <span class="tooltip-wrap">
+          <button class="tooltip-btn" type="button" aria-label="Info">?</button>
+          <span class="tooltip-content">Vereinslink von fussball.de einfügen oder Vereinsnamen eingeben. Die Auswahl wird im Browser gespeichert (Cookie).</span>
+        </span>
+      </h2>
+      <div id="recent-clubs" class="recent-clubs hidden"></div>
+      <div class="input-row">
+        <input
+          type="text"
+          id="club-search-input"
+          placeholder="Vereinsname oder fussball.de Verein-Link…"
+          autocomplete="off"
+        />
+        <button id="club-search-btn" class="btn btn-primary">Suchen</button>
       </div>
-
-      <div class="search-section">
-        <h3>Zeitraum</h3>
-        <div class="date-row">
-          <input type="date" id="date-from-input" />
-          <input type="date" id="date-to-input" />
-        </div>
-        <div class="action-row">
-          <button id="load-games-btn" class="btn btn-primary">Spielplan laden</button>
-          <button id="clear-club-btn" class="btn btn-secondary">Auswahl löschen</button>
-        </div>
-        <p class="hint">
-          Es werden nur Heimspiele geladen. Die Spielstätten werden direkt aus dem Vereinsspielplan von fussball.de extrahiert.
-        </p>
-      </div>
-
-      <div id="venues-list" class="venues-list">
-        <h3>Legende Spielstätten</h3>
-        <p id="no-venues-msg" class="empty-msg">Bitte zuerst einen Verein auswählen.</p>
-        <div id="venue-summary" class="venue-summary"></div>
-        <div id="load-controls" class="load-controls hidden"></div>
-      </div>
+      <div id="club-search-results" class="search-results hidden"></div>
+      <div id="current-club-info" class="current-club-display hidden"></div>
     </section>
 
-    <!-- Games Display -->
-    <section class="panel" id="games-panel">
+    <!-- Section 2: Spielstätten -->
+    <section class="panel section-step" id="section-spielstaetten">
+      <h2 class="section-title">
+        <span class="section-num">2</span> Spielstätten
+        <span class="tooltip-wrap">
+          <button class="tooltip-btn" type="button" aria-label="Info">?</button>
+          <span class="tooltip-content">Spielstätten werden automatisch aus dem Vereinsspielplan ermittelt (nächste 2 Monate). Wähle ab, welche im Kalender erscheinen sollen – die Auswahl wird gespeichert.</span>
+        </span>
+      </h2>
+      <div id="venues-loading" class="loading hidden">
+        <span class="spinner"></span> Spielstätten werden geladen…
+      </div>
+      <div id="venues-empty" class="empty-msg">Bitte zuerst einen Verein auswählen.</div>
+      <div id="venues-checkboxes" class="venues-checkboxes hidden"></div>
+      <div id="venues-error" class="error-msg hidden"></div>
+    </section>
+
+    <!-- Section 3: Belegungskalender -->
+    <section class="panel" id="section-kalender">
       <div class="panel-header">
-        <h2>Belegungskalender</h2>
+        <h2 class="section-title">
+          <span class="section-num">3</span> Belegungskalender
+        </h2>
         <div class="view-controls">
-          <button class="btn btn-sm btn-active" id="view-week-btn" data-view="week">Wochenansicht</button>
-          <button class="btn btn-sm" id="view-list-btn" data-view="list">Listenansicht</button>
+          <button class="btn btn-sm btn-active" id="view-week-btn">Woche</button>
+          <button class="btn btn-sm" id="view-month-btn">Monat</button>
         </div>
         <div class="nav-controls">
-          <button class="btn btn-sm" id="prev-week-btn">&#8249; Zurück</button>
-          <span id="current-week-label" class="week-label"></span>
-          <button class="btn btn-sm" id="next-week-btn">Weiter &#8250;</button>
-          <button class="btn btn-sm" id="today-btn">Heute</button>
+          <button class="btn btn-sm" id="prev-period-btn" aria-label="Zurück">&#8249;</button>
+          <input type="date" id="date-picker" class="date-picker-input" title="Datum wählen – öffnet die Kalenderansicht für diese Woche / diesen Monat" />
+          <span id="current-period-label" class="week-label"></span>
+          <button class="btn btn-sm" id="next-period-btn" aria-label="Weiter">&#8250;</button>
         </div>
       </div>
 
@@ -92,9 +86,9 @@
         </div>
       </div>
 
-      <!-- List view -->
-      <div id="list-view" class="hidden">
-        <div id="games-list"></div>
+      <!-- Month view -->
+      <div id="month-view" class="hidden">
+        <div id="month-list"></div>
       </div>
 
       <div id="no-games-msg" class="empty-msg hidden">

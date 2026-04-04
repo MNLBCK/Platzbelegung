@@ -34,6 +34,159 @@ body {
   flex-direction: column;
 }
 
+/* ---- Section step heading ---- */
+.section-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--primary);
+  border-bottom: 2px solid var(--primary-l);
+  padding-bottom: 0.6rem;
+  padding-left: 0.6rem;
+  margin-bottom: 1.2rem;
+  border-left: 4px solid var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.section-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--white);
+  font-size: 0.9rem;
+  font-weight: 800;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ---- Tooltip ---- */
+.tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.15rem;
+  flex-shrink: 0;
+}
+.tooltip-btn {
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 2px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.tooltip-btn:hover,
+.tooltip-wrap:hover .tooltip-btn,
+.tooltip-wrap.tooltip-open .tooltip-btn {
+  background: var(--primary);
+  color: var(--white);
+}
+.tooltip-content {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 0.5rem 0.8rem;
+  border-radius: 6px;
+  min-width: 200px;
+  max-width: 280px;
+  white-space: normal;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+.tooltip-content::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #333;
+}
+.tooltip-wrap:hover .tooltip-content,
+.tooltip-wrap.tooltip-open .tooltip-content {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* ---- Venue checkboxes ---- */
+.venues-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.venue-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 5px;
+  background: var(--bg);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.venue-checkbox-item:hover { background: var(--primary-l); }
+.venue-checkbox-item input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* ---- Inline date picker ---- */
+.date-picker-input {
+  padding: 0.28rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.2s;
+  color: var(--text);
+  background: var(--white);
+  cursor: pointer;
+  min-width: 0;
+  max-width: 140px;
+}
+.date-picker-input:focus { border-color: var(--primary); }
+
+/* ---- Month view ---- */
+.month-week-header {
+  background: #e8f5e9;
+  color: var(--primary-d);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px;
+  margin-bottom: 0.3rem;
+  margin-top: 0.8rem;
+  border-left: 3px solid var(--primary);
+}
+.month-week-header:first-child { margin-top: 0; }
+
 /* Header */
 header {
   background: linear-gradient(160deg, #005229 0%, #004020 60%, #003018 100%);
@@ -202,7 +355,7 @@ main {
 .btn-danger { background: var(--danger); color: var(--white); }
 .btn-danger:hover:not(:disabled) { background: #922b21; transform: translateY(-1px); }
 .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.82rem; }
-.btn-active { background: var(--primary-d) !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.25) !important; }
+.btn-active { background: var(--primary-d) !important; color: var(--white) !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.25) !important; }
 
 /* Search Results */
 .search-results {
