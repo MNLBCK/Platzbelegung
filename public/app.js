@@ -78,7 +78,7 @@ const $ = id => document.getElementById(id);
 
 // ===================== Generic Helpers =====================
 
-function showEl(el, show) {
+function showEl(el, show = true) {
   if (!el) return;
   el.classList.toggle('hidden', !show);
 }
@@ -456,7 +456,7 @@ async function extendDateRangeAndReload(newFrom, newTo) {
     const data = await resp.json();
     if (!resp.ok) return;
     const newGames = Array.isArray(data) ? data : [];
-    const gameKey = g => JSON.stringify([g.startDate, g.venueId, g.homeTeam]);
+    const gameKey = g => `${g.startDate}|${g.venueId || ''}|${g.homeTeam || ''}`;
     const existingKeys = new Set(state.games.map(gameKey));
     const merged = state.games.concat(newGames.filter(g => !existingKeys.has(gameKey(g))));
     merged.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
@@ -510,6 +510,7 @@ function reconcileVenueSelection() {
   if (!state.selectedVenueIds) return;
   const validIds = new Set(state.venues.map(v => v.id));
   const filtered = state.selectedVenueIds.filter(id => validIds.has(id));
+  // If no valid IDs remain or all venues are selected, null means "show all"
   state.selectedVenueIds =
     filtered.length === 0 || filtered.length === state.venues.length ? null : filtered;
   saveVenuesCookie();
@@ -817,7 +818,10 @@ function bindEvents() {
   });
 
   $('club-search-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); $('club-search-btn').click(); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      $('club-search-btn').click();
+    }
   });
 
   $('view-week-btn').addEventListener('click', () => switchView('week'));
