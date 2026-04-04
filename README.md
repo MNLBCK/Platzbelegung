@@ -34,7 +34,7 @@ config.yaml               ← zentrale Konfiguration (Verein, Plätze, Saison, �
 │   └── templates/
 │       └── occupancy.html.j2   ← gemeinsame Jinja2-Vorlage
 │
-└── Web-Server (server.js / Express)
+└── Web-Server (PHP)
     └── liest data/latest.json  ← von Python erzeugt
         ├── GET /api/snapshot   ← vollständiger Snapshot
         ├── GET /api/games      ← Spiele gefiltert nach Sportstätte
@@ -45,7 +45,7 @@ config.yaml               ← zentrale Konfiguration (Verein, Plätze, Saison, �
 **Datenfluss:**
 1. `platzbelegung scrape` → scrapt club matchplan (ajax.club.matchplan) → filtert nach Sportstätten → speichert `data/latest.json` + `data/snapshots/*.json`
 2. `platzbelegung html` → liest `data/latest.json` → generiert `data/latest.html`
-3. Express-Server → liest `data/latest.json` → liefert dynamische Web-UI
+3. PHP-Server → liest `data/latest.json` → liefert dynamische Web-UI
 
 **Scraping-Strategie:**
 - **Primär:** Club matchplan API (`scraper.scrape_club_matchplan()`) – stabil, strukturiert
@@ -53,7 +53,7 @@ config.yaml               ← zentrale Konfiguration (Verein, Plätze, Saison, �
 ## Voraussetzungen
 
 - Python 3.10 oder neuer
-- Node.js 18 oder neuer (nur für den Web-Server)
+- PHP 8.1 oder neuer (nur für den Web-Server)
 
 ## Python-Installation
 
@@ -119,13 +119,12 @@ platzbelegung html
 platzbelegung html --output /tmp/belegung.html
 ```
 
-## Web-Server (Node.js)
+## Web-Server (PHP)
 
-Der Express-Server liest `data/latest.json`, das von `platzbelegung scrape` erzeugt wurde.
+Der PHP-Server liest `data/latest.json`, das von `platzbelegung scrape` erzeugt wurde.
 
 ```bash
-npm install
-npm start
+php -S 0.0.0.0:3210 backend.php
 # → http://localhost:3210
 ```
 
@@ -143,9 +142,8 @@ npm start
 
 Für ein Hosting auf einem Webserver (z.B. Render, Railway, Fly.io, VPS):
 1. Repo deployen
-2. `npm install` ausführen
-3. Sicherstellen, dass `data/latest.json` vorhanden ist (z.B. per Cronjob via Python-Scraper) oder den Scraper separat deployen
-4. `npm start` (oder via PM2/systemd)
+2. Sicherstellen, dass `data/latest.json` vorhanden ist (z.B. per Cronjob via Python-Scraper) oder den Scraper separat deployen
+3. `php -S 0.0.0.0:3210 backend.php` starten (oder äquivalent via Prozessmanager)
 
 ## Projektstruktur
 
@@ -154,8 +152,8 @@ Platzbelegung/
 ├── config.yaml                        # Zentrale Konfiguration
 ├── README.md
 ├── pyproject.toml                     # Python-Paketdefinition
-├── package.json                       # Node.js-Abhängigkeiten
-├── server.js                          # Express-Web-Server
+├── package.json                       # npm scripts (startet PHP-Server)
+├── backend.php                         # PHP-Web-Server + API-Routen
 ├── public/                            # Statisches Frontend (Web-UI)
 │   ├── index.html
 │   ├── app.js
@@ -184,7 +182,7 @@ Platzbelegung/
     ├── test_render_html.py
     ├── test_parser.py
     ├── test_display.py
-    └── server.test.js
+    └── (keine Node-Backend-Tests mehr)
 ```
 
 ## Tests
@@ -193,7 +191,7 @@ Platzbelegung/
 # Python
 pytest
 
-# Node.js
+# (optional) npm script
 npm test
 ```
 
@@ -231,4 +229,3 @@ npm test
 - Die App scrapt fussball.de; Änderungen im Layout können das Scraping beeinflussen.
 - Beachte die Nutzungsbedingungen von fussball.de.
 - `data/` ist gitignoriert – Snapshots werden lokal gespeichert.
-
