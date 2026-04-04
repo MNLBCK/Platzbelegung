@@ -635,35 +635,21 @@ function renderVenueCheckboxes() {
     const color   = VENUE_COLORS[index % VENUE_COLORS.length];
     const checked = isVenueSelected(venue.id) ? 'checked' : '';
     const short   = deriveShortVenueName(venue.name);
+    const mapsUrl = MAPS_BASE + encodeURIComponent(venue.name);
     return (
       '<label class="venue-checkbox-item">' +
       '<input type="checkbox" data-venue-id="' + escapeHtml(venue.id) + '" ' + checked + ' />' +
       '<span class="venue-color-dot" style="background:' + color + '"></span>' +
       '<span class="venue-short-name">' + escapeHtml(short) + '</span>' +
       '<span class="venue-full-name" title="' + escapeHtml(venue.name) + '">' + escapeHtml(venue.name) + '</span>' +
+      '<a class="venue-map-icon" href="' + escapeHtml(mapsUrl) + '" target="_blank" rel="noopener noreferrer" title="In Google Maps öffnen" onclick="event.stopPropagation()">&#x1F4CD;</a>' +
       '</label>'
     );
   }).join('');
 
-  // Add map links below the checkboxes
+  // Remove any leftover map links section
   const existingLinks = cbEl.querySelector('.venues-map-links');
   if (existingLinks) existingLinks.remove();
-  if (state.venues.length > 0) {
-    const linksDiv = document.createElement('div');
-    linksDiv.className = 'venues-map-links';
-    state.venues.forEach(venue => {
-      if (!venue.name) return;
-      const mapsUrl = MAPS_BASE + encodeURIComponent(venue.name);
-      const a = document.createElement('a');
-      a.className = 'venue-map-link';
-      a.href = mapsUrl;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.textContent = '\uD83D\uDCCD\u2002' + venue.name;
-      linksDiv.appendChild(a);
-    });
-    if (linksDiv.childElementCount > 0) cbEl.appendChild(linksDiv);
-  }
 
   cbEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
