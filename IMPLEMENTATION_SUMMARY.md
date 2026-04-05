@@ -22,15 +22,12 @@
 - **Robustere ID-Extraktion**: Iteriert durch alle gefundenen Links, bis ein valides ID-Muster gefunden wird
 - **Ergebnis**: Auch wenn direkte Bild-URLs fehlen, werden Logos über die API-URL geladen
 
-### 2. Automatisches Freistellen mit CSS
+### 2. Automatisches Freistellen ohne Farbverlust
 
-#### Implementierung (public/style.css)
-Alle Logo-Klassen verwenden jetzt folgende CSS-Eigenschaften:
-
-```css
-filter: contrast(1.1) saturate(1.15);
-mix-blend-mode: multiply;
-```
+#### Implementierung (public/app.js)
+- Client-seitiges Canvas-Freistellen: Flood-Fill startet an den Bildrändern und entfernt nur nahezu weiße bzw. transparente Randpixel (RGB > 245)
+- Wappen-Innenflächen bleiben unverändert, sodass Farben und weiße Elemente nicht ausblassen
+- Fallback: Falls CORS den Canvas-Zugriff verhindert, bleibt das Original-Logo sichtbar
 
 #### Betroffene Klassen:
 - `.chip-logo` - Logos in Wochenansicht-Chips
@@ -39,19 +36,7 @@ mix-blend-mode: multiply;
 - `.club-search-logo` - Logos in Vereinssuche
 - `.recent-club-logo` - Logos in "Zuletzt verwendet"
 - `.current-club-logo` - Logo im Header des aktuellen Vereins
-
-#### Wie es funktioniert:
-1. **`mix-blend-mode: multiply`** entfernt weiße Pixel automatisch (wie Photoshop multiply)
-2. **`filter: contrast(1.1)`** macht Logo-Kanten schärfer
-3. **`filter: saturate(1.15)`** kompensiert Farbverlust durch multiply
-
-#### Vorteile dieser Lösung:
-- ✅ Keine Server-Last (reine CSS-Lösung)
-- ✅ Keine zusätzlichen HTTP-Anfragen
-- ✅ GPU-beschleunigt im Browser
-- ✅ Funktioniert automatisch für alle Logos
-- ✅ Keine Abhängigkeit von externen Services
-- ✅ Kein zusätzlicher Speicherbedarf
+- `.selected-club-logo` - Aktueller Verein im Header-Bereich
 
 ### 3. Umfassende Dokumentation
 

@@ -93,79 +93,25 @@ Logos werden an folgenden Stellen angezeigt:
 
 ## Automatisches Freistellen
 
-### Entscheidung: Client-seitige CSS-Lösung
+### Entscheidung: Client-seitige Canvas-Lösung
 
-Nach Evaluation der Optionen wurde eine **client-seitige CSS-Lösung** implementiert:
+Nach Evaluation der Optionen wird das Freistellen nun client-seitig per Canvas erledigt:
 
-#### Evaluierte Optionen:
-
-1. **Server-seitige Bildverarbeitung**
-   - ❌ Komplex, erfordert Bildverarbeitungs-Bibliotheken (GD, ImageMagick)
-   - ❌ Performance-Impact durch Bildverarbeitung
-   - ❌ Zusätzlicher Speicher für verarbeitete Bilder
-
-2. **Externe Services** (remove.bg, etc.)
-   - ❌ Kosten für API-Nutzung
-   - ❌ Abhängigkeit von Drittanbietern
-   - ❌ Datenschutzbedenken
-
-3. **Client-seitige CSS-Filter** ✅ **GEWÄHLT**
-   - ✅ Keine zusätzliche Backend-Komplexität
-   - ✅ Keine Performance-Kosten auf dem Server
-   - ✅ Sofortige Anwendung ohne Wartezeit
-   - ✅ Funktioniert gut für Logos mit weißem Hintergrund
-
-### Implementierung
-
-Alle Logo-Klassen verwenden folgende CSS-Eigenschaften:
-
-```css
-.chip-logo,
-.game-modal-team-logo,
-.gli-logo-img,
-.club-search-logo,
-.recent-club-logo,
-.current-club-logo {
-  /* Automatic background removal for logos with white backgrounds */
-  filter: contrast(1.1) saturate(1.15);
-  mix-blend-mode: multiply;
-}
-```
-
-#### Wie es funktioniert:
-
-1. **`mix-blend-mode: multiply`**
-   - Weiße Pixel (RGB 255,255,255) werden transparent
-   - Funktioniert wie Multiplizieren in Photoshop
-   - Erhält Farbinformationen des Logos
-
-2. **`filter: contrast(1.1) saturate(1.15)`**
-   - Leichte Kontrasterhöhung macht Logo-Kanten schärfer
-   - Sättigung kompensiert Farbverlust durch multiply
-   - Subtile Anpassung, keine aggressive Veränderung
+#### Ablauf:
+1. Logos werden mit `crossorigin="anonymous"` geladen.
+2. Nach dem Laden wird das Bild auf ein Canvas gezeichnet.
+3. Ein Flood-Fill startet an allen Außenkanten und markiert ausschließlich nahezu weiße bzw. transparente Pixel (`rgb > 245`).
+4. Nur die markierten Randbereiche werden transparent gesetzt – Innenbereiche bleiben unverändert.
+5. Das Ergebnis wird als Data-URL ins vorhandene `<img>` zurückgeschrieben. Falls Canvas-Zugriff (CORS) scheitert, bleibt das Original unverändert.
 
 #### Vorteile:
-- ✅ Funktioniert automatisch für alle Logos
-- ✅ Keine zusätzlichen HTTP-Anfragen
-- ✅ Keine Backend-Verarbeitung
-- ✅ GPU-beschleunigt im Browser
-- ✅ Funktioniert auch bei lazy-geladenen Bildern
+- ✅ Entfernt weiße Ränder präzise, ohne Farben oder weiße Flächen im Wappen auszuwaschen
+- ✅ Läuft komplett im Browser, kein Server- oder Drittanbieterbedarf
+- ✅ Fallback-freundlich: Wenn CORS den Canvas sperrt, bleibt das Logo einfach im Originalzustand
 
-#### Einschränkungen:
-- ⚠️ Nur optimal für Logos mit weißem oder hellem Hintergrund
-- ⚠️ Logos mit transparentem Hintergrund werden leicht verändert
-- ⚠️ Sehr dunkle Hintergründe werden nicht vollständig entfernt
-
-### Alternative für spezielle Fälle
-
-Falls ein Logo-Freistellen nicht zufriedenstellend funktioniert, können Logos einzeln überschrieben werden:
-
-```css
-.chip-logo[src*="specific-club-id"] {
-  mix-blend-mode: normal;
-  filter: none;
-}
-```
+#### Relevante Selektoren
+Alle Logo-Bildchen werden über `enhanceLogos()` behandelt:
+`.chip-logo`, `.game-modal-team-logo`, `.gli-logo-img`, `.club-search-logo`, `.recent-club-logo`, `.current-club-logo`, `.selected-club-logo`.
 
 ## URL-Normalisierung
 
