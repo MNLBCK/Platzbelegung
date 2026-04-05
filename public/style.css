@@ -662,6 +662,121 @@ main {
 .selected-club-link a:hover {
   text-decoration: underline;
 }
+/* Additional club card (from Spielgemeinschaft) */
+.selected-club-card + .selected-club-card {
+  margin-top: 0.5rem;
+}
+.selected-club-card--additional {
+  border-color: var(--primary);
+  opacity: 0.92;
+  position: relative;
+}
+.sg-remove-club-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-light);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+.sg-remove-club-btn:hover {
+  color: var(--danger);
+  background: rgba(192,57,43,.08);
+}
+/* Spielgemeinschaft suggestion banner */
+.sg-suggestion {
+  margin-top: 0.8rem;
+  background: #e8f5e9;
+  border: 1.5px solid var(--primary);
+  border-radius: var(--radius);
+  padding: 0.85rem 2.2rem 0.85rem 0.9rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  position: relative;
+}
+.sg-suggestion-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+.sg-suggestion-body {
+  flex: 1;
+  min-width: 0;
+}
+.sg-suggestion-title {
+  font-weight: 700;
+  color: var(--primary-d);
+  margin-bottom: 0.2rem;
+  font-size: 0.92rem;
+}
+.sg-suggestion-text {
+  font-size: 0.82rem;
+  color: var(--text-light);
+  margin-bottom: 0.55rem;
+  line-height: 1.4;
+}
+.sg-suggestion-clubs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.sg-suggestion-club {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+}
+.sg-club-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.sg-club-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sg-club-loc {
+  font-size: 0.76rem;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+.sg-add-btn {
+  flex-shrink: 0;
+  font-size: 0.78rem !important;
+  padding: 0.22rem 0.6rem !important;
+}
+.sg-dismiss-btn {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1.15rem;
+  color: var(--text-light);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+}
+.sg-dismiss-btn:hover {
+  color: var(--text);
+  background: rgba(0,0,0,.08);
+}
 .team-overview {
   margin-top: 0.8rem;
   border: 1px solid var(--border);

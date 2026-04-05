@@ -27,6 +27,7 @@ function saveSession() {
   try {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify({
       clubId: state.club ? state.club.id : null,
+      additionalClubIds: state.additionalClubs.map(c => c.id),
       games: state.games,
       loadedFrom: state.loadedFrom,
       loadedTo: state.loadedTo,
@@ -44,10 +45,11 @@ function loadSession() {
 
 // ===================== Constants =====================
 
-const COOKIE_CLUB    = 'pb_club';
-const COOKIE_RECENT  = 'pb_recent';
-const COOKIE_VENUES  = 'pb_venues';
-const COOKIE_VIEW    = 'pb_view';
+const COOKIE_CLUB         = 'pb_club';
+const COOKIE_RECENT       = 'pb_recent';
+const COOKIE_VENUES       = 'pb_venues';
+const COOKIE_VIEW         = 'pb_view';
+const COOKIE_EXTRA_CLUBS  = 'pb_extra_clubs';
 
 const VENUE_COLORS = [
   '#1565c0', '#6a1b9a', '#e65100', '#00695c',
@@ -80,6 +82,7 @@ const DE_MONTHS_LONG = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'J
 
 const state = {
   club: null,
+  additionalClubs: [],
   games: [],
   venues: [],
   venueShortNames: {},
@@ -384,44 +387,48 @@ function teamCategoryColor(game) {
   return TEAM_CATEGORY_COLORS[cat] || TEAM_CATEGORY_COLORS['Sonstige'];
 }
 
-// Returns the opponent's name: tries to detect which team belongs to our club
+// Returns the opponent's name: tries to detect which team belongs to our clubs
 function getOpponent(game) {
-  if (!state.club) return game.guestTeam || '';
-  const clubName = (state.club.name || '').toLowerCase();
-  if (!clubName) return game.guestTeam || '';
+  const allClubs = getAllClubs();
+  if (!allClubs.length) return game.guestTeam || '';
   const htLow = (game.homeTeam  || '').toLowerCase();
   const gtLow = (game.guestTeam || '').toLowerCase();
-  // Full club name substring match (works when club name ≥ several chars)
-  if (clubName.length >= 4) {
-    if (htLow.includes(clubName)) return game.guestTeam || '';
-    if (gtLow.includes(clubName)) return game.homeTeam  || '';
-  }
-  // Fallback: use first word longer than 2 chars with word-boundary matching
-  const key = clubName.split(/\s+/).find(w => w.length > 2);
-  if (key) {
-    const wordRe = new RegExp('(?:^|\\s)' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\s|$)');
-    if (wordRe.test(htLow)) return game.guestTeam || '';
-    if (wordRe.test(gtLow)) return game.homeTeam  || '';
+  for (const club of allClubs) {
+    const clubName = (club.name || '').toLowerCase();
+    if (!clubName) continue;
+    if (clubName.length >= 4) {
+      if (htLow.includes(clubName)) return game.guestTeam || '';
+      if (gtLow.includes(clubName)) return game.homeTeam  || '';
+    }
+    const key = clubName.split(/\s+/).find(w => w.length > 2);
+    if (key) {
+      const wordRe = new RegExp('(?:^|\\s)' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\s|$)');
+      if (wordRe.test(htLow)) return game.guestTeam || '';
+      if (wordRe.test(gtLow)) return game.homeTeam  || '';
+    }
   }
   return game.guestTeam || '';
 }
 
 // Returns the logo URL for the opponent team
 function getOpponentLogoUrl(game) {
-  if (!state.club) return game.guestLogoUrl || '';
-  const clubName = (state.club.name || '').toLowerCase();
-  if (!clubName) return game.guestLogoUrl || '';
+  const allClubs = getAllClubs();
+  if (!allClubs.length) return game.guestLogoUrl || '';
   const htLow = (game.homeTeam  || '').toLowerCase();
   const gtLow = (game.guestTeam || '').toLowerCase();
-  if (clubName.length >= 4) {
-    if (htLow.includes(clubName)) return game.guestLogoUrl || '';
-    if (gtLow.includes(clubName)) return game.homeLogoUrl  || '';
-  }
-  const key = clubName.split(/\s+/).find(w => w.length > 2);
-  if (key) {
-    const wordRe = new RegExp('(?:^|\\s)' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\s|$)');
-    if (wordRe.test(htLow)) return game.guestLogoUrl || '';
-    if (wordRe.test(gtLow)) return game.homeLogoUrl  || '';
+  for (const club of allClubs) {
+    const clubName = (club.name || '').toLowerCase();
+    if (!clubName) continue;
+    if (clubName.length >= 4) {
+      if (htLow.includes(clubName)) return game.guestLogoUrl || '';
+      if (gtLow.includes(clubName)) return game.homeLogoUrl  || '';
+    }
+    const key = clubName.split(/\s+/).find(w => w.length > 2);
+    if (key) {
+      const wordRe = new RegExp('(?:^|\\s)' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\s|$)');
+      if (wordRe.test(htLow)) return game.guestLogoUrl || '';
+      if (wordRe.test(gtLow)) return game.homeLogoUrl  || '';
+    }
   }
   return game.guestLogoUrl || '';
 }
@@ -519,6 +526,8 @@ function loadFromCookies() {
   if (savedView === 'week' || savedView === 'month') state.view = savedView;
   const savedVenues = getCookie(COOKIE_VENUES);
   state.selectedVenueIds = Array.isArray(savedVenues) ? savedVenues : null;
+  const savedExtra = getCookie(COOKIE_EXTRA_CLUBS);
+  state.additionalClubs = Array.isArray(savedExtra) ? savedExtra : [];
 }
 
 function saveClubCookie() {
@@ -526,6 +535,14 @@ function saveClubCookie() {
     setCookie(COOKIE_CLUB, state.club);
   } else {
     deleteCookie(COOKIE_CLUB);
+  }
+}
+
+function saveAdditionalClubsCookie() {
+  if (state.additionalClubs.length > 0) {
+    setCookie(COOKIE_EXTRA_CLUBS, state.additionalClubs);
+  } else {
+    deleteCookie(COOKIE_EXTRA_CLUBS);
   }
 }
 
@@ -603,6 +620,7 @@ function renderRecentClubs() {
 
 function selectClub(club) {
   state.club = club;
+  state.additionalClubs = [];
   state.games = [];
   state.venues = [];
   state.venueShortNames = {};
@@ -610,6 +628,7 @@ function selectClub(club) {
   state.loadedTo = '';
   state.selectedVenueIds = null;
   saveClubCookie();
+  saveAdditionalClubsCookie();
   saveRecentClub(club);
   saveVenuesCookie();
   renderSelectedClub();
@@ -617,6 +636,7 @@ function selectClub(club) {
   updateSectionVisibility();
   renderVenueCheckboxes();
   setTeamOverviewLoading();
+  hideSGSuggestion();
   $('club-search-input').value = '';
   const resultsEl = $('club-search-results');
   resultsEl.innerHTML = '';
@@ -635,25 +655,39 @@ function renderSelectedClub() {
     showEl(el, true);
     return;
   }
-  const logoHtml = club.logoUrl
-    ? '<img class="selected-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
-    : '<span class="selected-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>';
-  const clubUrl = getClubUrl(club);
-  el.innerHTML =
-    '<div class="selected-club-label">Ausgewählter Verein</div>' +
-    '<div class="selected-club-card">' +
-      '<div class="selected-club-logo-wrap">' + logoHtml + '</div>' +
-      '<div class="selected-club-details">' +
-        '<div class="selected-club-name">' + escapeHtml(club.name) + '</div>' +
-        (club.location ? '<div class="selected-club-location">' + escapeHtml(club.location) + '</div>' : '') +
-        (clubUrl ? '<div class="selected-club-link"><a href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">Verein auf fussball.de &#8599;</a></div>' : '') +
-      '</div>' +
-    '</div>';
+  const allClubs = getAllClubs();
+  const label = allClubs.length > 1 ? 'Ausgewählte Vereine' : 'Ausgewählter Verein';
+  const cardsHtml = allClubs.map((c, i) => {
+    const isPrimary = i === 0;
+    const logoHtml = c.logoUrl
+      ? '<img class="selected-club-logo" src="' + escapeHtml(c.logoUrl) + '" alt="' + escapeHtml(c.name) + '" loading="lazy">'
+      : '<span class="selected-club-logo-fallback">' + escapeHtml((c.name || '?').charAt(0).toUpperCase()) + '</span>';
+    const clubUrl = getClubUrl(c);
+    const removeBtn = !isPrimary
+      ? '<button class="sg-remove-club-btn" data-club-id="' + escapeHtml(c.id) + '" title="Verein entfernen" aria-label="Verein entfernen">\u00d7</button>'
+      : '';
+    return (
+      '<div class="selected-club-card' + (!isPrimary ? ' selected-club-card--additional' : '') + '">' +
+        '<div class="selected-club-logo-wrap">' + logoHtml + '</div>' +
+        '<div class="selected-club-details">' +
+          '<div class="selected-club-name">' + escapeHtml(c.name) + '</div>' +
+          (c.location ? '<div class="selected-club-location">' + escapeHtml(c.location) + '</div>' : '') +
+          (clubUrl ? '<div class="selected-club-link"><a href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">Verein auf fussball.de &#8599;</a></div>' : '') +
+        '</div>' +
+        removeBtn +
+      '</div>'
+    );
+  }).join('');
+  el.innerHTML = '<div class="selected-club-label">' + label + '</div>' + cardsHtml;
+  el.querySelectorAll('.sg-remove-club-btn').forEach(btn => {
+    btn.addEventListener('click', () => removeAdditionalClub(btn.dataset.clubId));
+  });
   showEl(el, true);
 }
 
 function clearClub() {
   state.club = null;
+  state.additionalClubs = [];
   state.games = [];
   state.venues = [];
   state.venueShortNames = {};
@@ -661,11 +695,13 @@ function clearClub() {
   state.loadedFrom = '';
   state.loadedTo = '';
   saveClubCookie();
+  saveAdditionalClubsCookie();
   saveVenuesCookie();
   sessionStorage.removeItem(SESSION_KEY);
   renderSelectedClub();
   renderVenueCheckboxes();
   updateSectionVisibility();
+  hideSGSuggestion();
   $('club-search-input').value = '';
   showEl($('week-view'), false);
   showEl($('month-view'), false);
@@ -728,12 +764,29 @@ async function doClubSearch(query) {
 
 // ===================== Game Loading =====================
 
+function getAllClubs() {
+  const clubs = [];
+  if (state.club) clubs.push(state.club);
+  state.additionalClubs.forEach(c => clubs.push(c));
+  return clubs;
+}
+
 async function autoLoadGames() {
   if (!state.club || !state.club.id) return;
 
-  // Restore from session if same club
+  // Restore from session if same clubs
   const session = loadSession();
-  if (session && session.clubId === state.club.id && Array.isArray(session.games) && session.games.length > 0) {
+  const sessionClubId = session ? session.clubId : null;
+  const sessionAdditionalIds = Array.isArray(session && session.additionalClubIds) ? session.additionalClubIds : [];
+  const currentAdditionalIds = state.additionalClubs.map(c => c.id);
+  const sameClubs =
+    session &&
+    sessionClubId === state.club.id &&
+    sessionAdditionalIds.length === currentAdditionalIds.length &&
+    currentAdditionalIds.every(id => sessionAdditionalIds.includes(id)) &&
+    Array.isArray(session.games) && session.games.length > 0;
+
+  if (sameClubs) {
     state.games = session.games;
     state.loadedFrom = session.loadedFrom;
     state.loadedTo = session.loadedTo;
@@ -750,29 +803,43 @@ async function autoLoadGames() {
   await fetchGames(dateFrom, dateTo);
 }
 
+async function fetchGamesForClub(clubId, dateFrom, dateTo) {
+  const url =
+    '/api/club-matchplan?id=' + encodeURIComponent(clubId) +
+    '&dateFrom=' + encodeURIComponent(dateFrom) +
+    '&dateTo=' + encodeURIComponent(dateTo) +
+    '&matchType=1&max=100';
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return Array.isArray(data) ? data : [];
+  } catch (_) {
+    return [];
+  }
+}
+
 async function fetchGames(dateFrom, dateTo) {
-  if (!state.club || !state.club.id) return;
+  const allClubs = getAllClubs();
+  if (!allClubs.length) return;
   showEl($('venues-loading'), true);
   showEl($('venues-empty'), false);
   showEl($('venues-error'), false);
   showError('');
   showLoading(true);
   try {
-    const url =
-      '/api/club-matchplan?id=' + encodeURIComponent(state.club.id) +
-      '&dateFrom=' + encodeURIComponent(dateFrom) +
-      '&dateTo=' + encodeURIComponent(dateTo) +
-      '&matchType=1&max=100';
-    const resp = await fetch(url);
-    const data = await resp.json();
-    if (!resp.ok) {
-      showError(data.error || 'Fehler beim Laden der Spiele');
-      const errEl = $('venues-error');
-      errEl.textContent = 'Fehler beim Laden der Spielstätten.';
-      showEl(errEl, true);
-      return;
-    }
-    state.games = Array.isArray(data) ? data : [];
+    const results = await Promise.all(
+      allClubs.map(club => fetchGamesForClub(club.id, dateFrom, dateTo))
+    );
+    const gameKey = g => `${g.startDate}|${g.venueId || ''}|${g.homeTeam || ''}|${g.guestTeam || ''}`;
+    const seen = new Set();
+    const merged = [];
+    results.flat().forEach(g => {
+      const key = gameKey(g);
+      if (!seen.has(key)) { seen.add(key); merged.push(g); }
+    });
+    merged.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+    state.games = merged;
     state.loadedFrom = dateFrom;
     state.loadedTo = dateTo;
     state.venues = deriveVenuesFromGames(state.games);
@@ -782,6 +849,7 @@ async function fetchGames(dateFrom, dateTo) {
     renderVenueCheckboxes();
     renderTeamOverview();
     renderCurrentView();
+    await detectAndSuggestSGPartners();
   } catch (err) {
     showError('Netzwerkfehler: ' + err.message);
     const errEl = $('venues-error');
@@ -794,19 +862,15 @@ async function fetchGames(dateFrom, dateTo) {
 }
 
 async function extendDateRangeAndReload(newFrom, newTo) {
-  if (!state.club || !state.club.id) return;
+  const allClubs = getAllClubs();
+  if (!allClubs.length) return;
   showLoading(true);
   try {
-    const url =
-      '/api/club-matchplan?id=' + encodeURIComponent(state.club.id) +
-      '&dateFrom=' + encodeURIComponent(newFrom) +
-      '&dateTo=' + encodeURIComponent(newTo) +
-      '&matchType=1&max=100';
-    const resp = await fetch(url);
-    const data = await resp.json();
-    if (!resp.ok) return;
-    const newGames = Array.isArray(data) ? data : [];
-    const gameKey = g => `${g.startDate}|${g.venueId || ''}|${g.homeTeam || ''}`;
+    const results = await Promise.all(
+      allClubs.map(club => fetchGamesForClub(club.id, newFrom, newTo))
+    );
+    const newGames = results.flat();
+    const gameKey = g => `${g.startDate}|${g.venueId || ''}|${g.homeTeam || ''}|${g.guestTeam || ''}`;
     const existingKeys = new Set(state.games.map(gameKey));
     const merged = state.games.concat(newGames.filter(g => !existingKeys.has(gameKey(g))));
     merged.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
@@ -828,7 +892,7 @@ async function extendDateRangeAndReload(newFrom, newTo) {
 }
 
 function checkAndExtendRange(targetDate) {
-  if (!state.club || !state.club.id || !state.loadedFrom || !state.loadedTo) return;
+  if (!getAllClubs().length || !state.loadedFrom || !state.loadedTo) return;
   const rangeEnd =
     state.view === 'week'
       ? addDays(targetDate, 6)
@@ -854,6 +918,154 @@ function checkAndExtendRange(targetDate) {
     needsReload = true;
   }
   if (needsReload) extendDateRangeAndReload(newFrom, newTo);
+}
+
+// ===================== Spielgemeinschaft Detection =====================
+
+// Common club type prefixes to ignore when matching club keywords
+const SG_CLUB_PREFIXES = new Set([
+  'fc', 'sv', 'tsv', 'ssg', 'ssk', 'skv', 'vfb', 'vfr', 'tsg', 'fsv', 'bsc',
+  'rfc', 'dfb', 'sg', 'sgm', 'spvg', 'sfc', 'stfc', 'asv', 'sc', 'tv', 'tb',
+  'ksv', 'ssv', 'rsv', 'psv', 'gsv', 'msv', 'wsv', 'esv', 'bsv', 'hsv', 'csv',
+]);
+
+// Regex to strip German football team-type suffixes (e.g. "Herren", "A-Junioren", "U17")
+const SG_TEAM_SUFFIX_RE = /\s+(?:Herren|Damen|Frauen|Senioren|(?:[A-G]-)?Junior(?:en|innen)|U\d+|Bambini|[IVX]+)\s*\d*\s*$/i;
+
+// Minimum length for a partner name to be considered a valid club name candidate
+const SG_MIN_PARTNER_LEN = 3;
+
+function detectSpielgemeinschaftPartners(games) {
+  if (!state.club || !games.length) return [];
+  const clubName = (state.club.name || '').trim();
+  if (!clubName) return [];
+
+  const clubLower = clubName.toLowerCase();
+  const clubKeywords = clubLower.split(/\s+/).filter(w => w.length > 3 && !SG_CLUB_PREFIXES.has(w));
+  const existingIds = new Set(getAllClubs().map(c => c.id));
+  const partnerNames = new Set();
+
+  games.forEach(game => {
+    [game.homeTeam, game.guestTeam].forEach(teamName => {
+      if (!teamName || !teamName.includes('/')) return;
+
+      // Strip team-type suffix, then SG/SGM prefix
+      const cleaned = teamName.replace(SG_TEAM_SUFFIX_RE, '').trim().replace(/^SG[M]?\s+/i, '').trim();
+      const slashIdx = cleaned.indexOf('/');
+      if (slashIdx < 0) return;
+
+      const partA = cleaned.slice(0, slashIdx).trim();
+      const partB = cleaned.slice(slashIdx + 1).trim();
+      if (!partA || !partB || partA.length < SG_MIN_PARTNER_LEN || partB.length < SG_MIN_PARTNER_LEN) return;
+
+      const partALow = partA.toLowerCase();
+      const partBLow = partB.toLowerCase();
+
+      const aMatchesClub =
+        partALow.includes(clubLower) ||
+        clubLower.includes(partALow) ||
+        (clubKeywords.length > 0 && clubKeywords.some(kw => partALow.includes(kw)));
+
+      const bMatchesClub =
+        partBLow.includes(clubLower) ||
+        clubLower.includes(partBLow) ||
+        (clubKeywords.length > 0 && clubKeywords.some(kw => partBLow.includes(kw)));
+
+      if (aMatchesClub && !bMatchesClub) partnerNames.add(partB);
+      else if (bMatchesClub && !aMatchesClub) partnerNames.add(partA);
+    });
+  });
+
+  return Array.from(partnerNames);
+}
+
+async function detectAndSuggestSGPartners() {
+  const partnerNames = detectSpielgemeinschaftPartners(state.games);
+  if (!partnerNames.length) { hideSGSuggestion(); return; }
+
+  const existingIds = new Set(getAllClubs().map(c => c.id));
+  const suggestions = [];
+
+  for (const name of partnerNames) {
+    try {
+      const resp = await fetch('/api/search/clubs?q=' + encodeURIComponent(name));
+      if (!resp.ok) continue;
+      const clubs = await resp.json();
+      if (!Array.isArray(clubs)) continue;
+      const match = clubs.find(c => !existingIds.has(c.id));
+      if (match) {
+        suggestions.push(match);
+        existingIds.add(match.id); // avoid duplicates across partner names
+      }
+    } catch (_) {}
+  }
+
+  if (suggestions.length > 0) {
+    renderSGSuggestion(suggestions);
+  } else {
+    hideSGSuggestion();
+  }
+}
+
+function renderSGSuggestion(clubs) {
+  const el = $('sg-suggestion');
+  if (!el) return;
+  const clubsHtml = clubs.map(club =>
+    '<div class="sg-suggestion-club">' +
+      (club.logoUrl ? '<img class="sg-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="" loading="lazy">' : '') +
+      '<span class="sg-club-name">' + escapeHtml(club.name) + '</span>' +
+      (club.location ? '<span class="sg-club-loc">' + escapeHtml(club.location) + '</span>' : '') +
+      '<button class="btn btn-sm sg-add-btn" type="button" data-club-id="' + escapeHtml(club.id) + '">Hinzufügen</button>' +
+    '</div>'
+  ).join('');
+  el.innerHTML =
+    '<div class="sg-suggestion-icon">\uD83E\uDD1D</div>' +
+    '<div class="sg-suggestion-body">' +
+      '<div class="sg-suggestion-title">Spielgemeinschaft erkannt</div>' +
+      '<div class="sg-suggestion-text">Dieser Verein spielt in einer Spielgemeinschaft. M\u00f6chten Sie die Partnervereine hinzuf\u00fcgen, um alle Spiele und Spielst\u00e4tten zu sehen?</div>' +
+      '<div class="sg-suggestion-clubs">' + clubsHtml + '</div>' +
+    '</div>' +
+    '<button class="sg-dismiss-btn" type="button" aria-label="Schlie\u00dfen">\u00d7</button>';
+  el.querySelectorAll('.sg-add-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const club = clubs.find(c => c.id === btn.dataset.clubId);
+      if (club) addAdditionalClub(club);
+    });
+  });
+  el.querySelector('.sg-dismiss-btn').addEventListener('click', hideSGSuggestion);
+  showEl(el, true);
+}
+
+function hideSGSuggestion() {
+  showEl($('sg-suggestion'), false);
+}
+
+async function addAdditionalClub(club) {
+  if (!club || !club.id) return;
+  if (state.additionalClubs.some(c => c.id === club.id)) return;
+  if (state.club && state.club.id === club.id) return;
+  state.additionalClubs.push({
+    id: club.id,
+    name: club.name || club.id,
+    location: club.location || '',
+    logoUrl: club.logoUrl || '',
+    url: club.url || '',
+  });
+  saveAdditionalClubsCookie();
+  renderSelectedClub();
+  hideSGSuggestion();
+  const dateFrom = state.loadedFrom || getDefaultDateRange().dateFrom;
+  const dateTo   = state.loadedTo   || getDefaultDateRange().dateTo;
+  await fetchGames(dateFrom, dateTo);
+}
+
+async function removeAdditionalClub(clubId) {
+  state.additionalClubs = state.additionalClubs.filter(c => c.id !== clubId);
+  saveAdditionalClubsCookie();
+  renderSelectedClub();
+  const dateFrom = state.loadedFrom || getDefaultDateRange().dateFrom;
+  const dateTo   = state.loadedTo   || getDefaultDateRange().dateTo;
+  await fetchGames(dateFrom, dateTo);
 }
 
 // ===================== Venue Selection =====================
