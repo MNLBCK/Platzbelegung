@@ -219,6 +219,44 @@ Beispiel für eine Subdomain wie `platzbelegung.sghochx.de`:
 
 Die Weboberfläche selbst läuft mit statischen Dateien + PHP sehr gut auf klassischem Hosting. Der **Scraping-Teil** ist getrennt gedacht und kann bei Bedarf extern laufen. Genau deshalb ist `data/latest.json` das zentrale Austauschformat zwischen Scraper und Webserver.
 
+#### Deploy per Skript (empfohlen)
+
+Im Repo liegt ein Deploy-Skript, das die nötigen Dateien automatisch hochlädt, ohne echte Zugangsdaten ins Git zu legen.
+
+1. Beispielkonfiguration kopieren:
+
+```bash
+cp deploy.example.env .deploy.local.env
+```
+
+2. `.deploy.local.env` lokal mit den echten Zugangsdaten füllen.
+
+3. Deploy starten:
+
+```bash
+bash scripts/deploy.sh
+```
+
+Optional mit anderer Konfigurationsdatei:
+
+```bash
+bash scripts/deploy.sh /pfad/zu/meiner.deploy.env
+```
+
+#### Was das Skript macht
+
+- führt optional `platzbelegung scrape` aus
+- lädt `public/`, `backend.php` und `data/latest.json` hoch
+- lädt optional zusätzlich `config.yaml`, `.htaccess` und `data/latest.html` hoch
+- unterstützt `ftp`, `ftps`, `sftp` und `rsync`
+
+#### Wichtige Dateien für das Skript
+
+- `scripts/deploy.sh` → Deploy-Logik
+- `deploy.example.env` → commitbare Vorlage ohne echte Zugangsdaten
+- `.deploy.local.env` → lokale Datei mit echten Zugangsdaten, wird nicht committed
+- `.htaccess` → leitet Requests an `backend.php` weiter, damit `/` und `/api/...` auf klassischem Hosting funktionieren
+
 ## Projektstruktur
 
 ```

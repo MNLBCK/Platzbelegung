@@ -7,10 +7,18 @@ const DATA_DIR = __DIR__ . '/data';
 const LATEST_SNAPSHOT = DATA_DIR . '/latest.json';
 const CONFIG_FILE = __DIR__ . '/config.yaml';
 
+function isHeadRequest(): bool
+{
+    return (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD');
+}
+
 function jsonResponse($data, int $status = 200): void
 {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
+    if (isHeadRequest()) {
+        return;
+    }
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
@@ -123,11 +131,77 @@ function formatGermanDate(DateTimeImmutable $date): string
     return $date->format('d.m.Y');
 }
 
-function parseClubMatchplanHtml(string $html): array
+function createXPathFromHtml(string $html): DOMXPath
 {
     $dom = new DOMDocument();
-    @$dom->loadHTML($html);
-    $xpath = new DOMXPath($dom);
+    libxml_use_internal_errors(true);
+    if (function_exists('iconv')) {
+        $clean = iconv('UTF-8', 'UTF-8//IGNORE', $html);
+        if ($clean !== false) {
+            $html = $clean;
+        }
+    }
+    $dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOWARNING | LIBXML_NOERROR);
+    libxml_clear_errors();
+    return new DOMXPath($dom);
+}
+
+function parseGameDetail(string $url): array
+{
+    if ($url === '') return [];
+    try {
+        $xpath = createXPathFromHtml(httpGet($url));
+    } catch (Throwable $e) {
+        return [];
+    }
+
+    $logos = [];
+    foreach ([
+        '//*[contains(@class,"team") and contains(@class,"home")]//img[1]',
+        '//*[contains(@class,"team") and contains(@class,"guest")]//img[1]',
+        '//*[contains(@class,"club") and contains(@class,"home")]//img[1]',
+        '//*[contains(@class,"club") and contains(@class,"guest")]//img[1]',
+        '(//img[contains(@src,"getLogo") or contains(@data-src,"getLogo")])[1]',
+        '(//img[contains(@src,"getLogo") or contains(@data-src,"getLogo")])[2]',
+    ] as $expr) {
+        $node = $xpath->query($expr)?->item(0);
+        if (!$node instanceof DOMElement) continue;
+        $src = $node->getAttribute('src') ?: $node->getAttribute('data-src');
+        if ($src === '') {
+            $srcset = $node->getAttribute('srcset');
+            if ($srcset !== '') {
+                $src = preg_split('/\s+/', trim($srcset))[0] ?? '';
+            }
+        }
+        if ($src !== '') {
+            $logos[] = toAbsoluteUrl($src);
+        }
+    }
+    $logos = array_values(array_unique(array_filter($logos)));
+
+    $result = '';
+    foreach ([
+        'string(//*[contains(@class,"result")][1])',
+        'string(//*[contains(@class,"score")][1])',
+        'string(//*[contains(@class,"match-result")][1])',
+    ] as $expr) {
+        $text = normalizeText($xpath->evaluate($expr));
+        if ($text !== '' && preg_match('/(\d{1,2}:\d{1,2}|-:-)/', $text, $m)) {
+            $result = $m[1];
+            break;
+        }
+    }
+
+    return [
+        'homeLogoUrl' => $logos[0] ?? '',
+        'guestLogoUrl' => $logos[1] ?? '',
+        'result' => $result,
+    ];
+}
+
+function parseClubMatchplanHtml(string $html): array
+{
+    $xpath = createXPathFromHtml($html);
 
     $rows = $xpath->query('//table[contains(@class,"table-striped")]/tbody/tr');
     $games = [];
@@ -166,16 +240,39 @@ function parseClubMatchplanHtml(string $html): array
         $extractLogo = function(?DOMNode $cell) use ($xpath): string {
             if (!$cell) return '';
             $img = $xpath->evaluate('string(.//img[1]/@src)', $cell);
+            if ($img === '') {
+                $img = $xpath->evaluate('string(.//img[1]/@data-src)', $cell);
+            }
+            if ($img === '') {
+                $srcset = $xpath->evaluate('string(.//img[1]/@srcset)', $cell);
+                if ($srcset !== '') {
+                    $img = preg_split('/\s+/', trim($srcset))[0] ?? '';
+                }
+            }
             if ($img !== '') return toAbsoluteUrl($img);
             $href = $xpath->evaluate('string(.//*[contains(@class,"club-wrapper")][1]/@href)', $cell);
             if ($href === '') {
                 $href = $xpath->evaluate('string(.//a[1]/@href)', $cell);
             }
-            if (preg_match('#/id/([^/?#]+)#', $href, $m)) {
+            if (preg_match('~/id/([^/?#]+)~', $href, $m)) {
                 return 'https://www.fussball.de/export.media/-/action/getLogo/format/7/id/' . $m[1];
             }
             return '';
         };
+
+        $scoreText = normalizeText($xpath->evaluate('string(.//td[contains(@class,"column-score") or contains(@class,"column-result")][1])', $row));
+        if ($scoreText !== '' && !preg_match('/^(\d{1,2}:\d{2}|\d{2}:\d{2})$/', $scoreText)) {
+            if (preg_match('/(\d{1,2}:\d{1,2}|-:-)/', $scoreText, $sm)) {
+                $scoreText = $sm[1];
+            }
+        } else {
+            $scoreText = '';
+        }
+
+        $gameUrl = toAbsoluteUrl((string)($xpath->evaluate('string(.//a[contains(normalize-space(.),"Zum Spiel")][1]/@href)', $row) ?: ''));
+        if ($gameUrl === '') {
+            $gameUrl = toAbsoluteUrl((string)($xpath->evaluate('string(.//a[contains(@href,"/spiel/")][1]/@href)', $row) ?: ''));
+        }
 
         $venueName = '';
         for ($j = $i + 1; $j < $rows->length; $j++) {
@@ -191,16 +288,29 @@ function parseClubMatchplanHtml(string $html): array
         $parsedDate = parseGermanDate($currentDate, $currentTime);
         if (!$parsedDate) continue;
 
+        $homeLogoUrl = $extractLogo($homeCell);
+        $guestLogoUrl = $extractLogo($guestCell);
+        $detail = $gameUrl !== '' ? parseGameDetail($gameUrl) : [];
+        if (($homeLogoUrl === '' || $guestLogoUrl === '') && !empty($detail)) {
+            $homeLogoUrl = $homeLogoUrl !== '' ? $homeLogoUrl : ($detail['homeLogoUrl'] ?? '');
+            $guestLogoUrl = $guestLogoUrl !== '' ? $guestLogoUrl : ($detail['guestLogoUrl'] ?? '');
+        }
+        if ($scoreText === '' && !empty($detail['result'])) {
+            $scoreText = (string)$detail['result'];
+        }
+
         $games[] = [
             'venueId' => slugifyVenue($venueName),
             'venueName' => $venueName,
             'date' => formatGermanDate($parsedDate),
             'time' => $currentTime,
             'homeTeam' => $homeTeam,
-            'homeLogoUrl' => $extractLogo($homeCell),
+            'homeLogoUrl' => $homeLogoUrl,
             'guestTeam' => $guestTeam,
-            'guestLogoUrl' => $extractLogo($guestCell),
+            'guestLogoUrl' => $guestLogoUrl,
             'competition' => $currentCompetition,
+            'result' => $scoreText,
+            'gameUrl' => $gameUrl,
             'startDate' => $parsedDate->format(DATE_ATOM),
         ];
     }
@@ -220,7 +330,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 parse_str(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_QUERY) ?: '', $query);
 
-if ($method === 'GET' && str_starts_with($uri, '/api/')) {
+if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/')) {
     if ($uri === '/api/snapshot') {
         $snapshot = loadLatestSnapshot();
         if (!$snapshot) jsonResponse(['error' => 'Kein Snapshot vorhanden. Bitte zuerst "platzbelegung scrape" ausführen.'], 404);
@@ -250,7 +360,7 @@ if ($method === 'GET' && str_starts_with($uri, '/api/')) {
             if ($uri === '/api/search') {
                 $url = FUSSBALL_DE_BASE . '/suche/-/suche/' . rawurlencode($q) . '/typ/sportstaette';
                 $html = httpGet($url);
-                $dom = new DOMDocument(); @$dom->loadHTML($html); $xp = new DOMXPath($dom);
+                $xp = createXPathFromHtml($html);
                 $nodes = $xp->query('//*[contains(@class,"search-result-item") or contains(@class,"result-item")]');
                 $venues = [];
                 foreach ($nodes as $item) {
@@ -266,7 +376,7 @@ if ($method === 'GET' && str_starts_with($uri, '/api/')) {
             } else {
                 $url = FUSSBALL_DE_BASE . '/suche/-/text/' . rawurlencode($q) . '/restriction/CLUB_AND_TEAM#!/';
                 $html = httpGet($url);
-                $dom = new DOMDocument(); @$dom->loadHTML($html); $xp = new DOMXPath($dom);
+                $xp = createXPathFromHtml($html);
                 $nodes = $xp->query('//*[@id="club-search-results"]//*[@id="clublist"]//li');
                 $clubs = [];
                 foreach ($nodes as $item) {
@@ -274,7 +384,7 @@ if ($method === 'GET' && str_starts_with($uri, '/api/')) {
                     $name = normalizeText($xp->evaluate('string(.//a[contains(@class,"image-wrapper")][1]//*[contains(@class,"name")][1])', $item));
                     $location = normalizeText($xp->evaluate('string(.//a[contains(@class,"image-wrapper")][1]//*[contains(@class,"sub")][1])', $item));
                     $logo = toAbsoluteUrl($xp->evaluate('string(.//a[contains(@class,"image-wrapper")][1]//img[1]/@src)', $item));
-                    if (preg_match('#/id/([^/?#]+)#', $href, $m) && $name !== '') {
+                    if (preg_match('~/id/([^/?#]+)~', $href, $m) && $name !== '') {
                         $clubs[] = ['id' => $m[1], 'name' => $name, 'location' => $location, 'logoUrl' => $logo, 'url' => str_starts_with($href, 'http') ? $href : FUSSBALL_DE_BASE . $href];
                     }
                 }
@@ -371,7 +481,7 @@ if ($method === 'PUT' && $uri === '/api/config/venues') {
     return;
 }
 
-if ($method === 'GET' && ($uri === '/' || !str_starts_with($uri, '/api/'))) {
+if (($method === 'GET' || $method === 'HEAD') && ($uri === '/' || !str_starts_with($uri, '/api/'))) {
     $file = $uri === '/' ? '/index.html' : $uri;
     $path = realpath(__DIR__ . '/public' . $file);
     $public = realpath(__DIR__ . '/public');
@@ -388,7 +498,9 @@ if ($method === 'GET' && ($uri === '/' || !str_starts_with($uri, '/api/'))) {
             'json'=>'application/json; charset=utf-8',
         ][$ext] ?? 'application/octet-stream';
         header('Content-Type: ' . $mime);
-        readfile($path);
+        if (!isHeadRequest()) {
+            readfile($path);
+        }
         return;
     }
 }

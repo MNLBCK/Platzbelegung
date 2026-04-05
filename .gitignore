@@ -69,3 +69,7 @@ dmypy.json
 
 # Scraped data & generated output (do not commit)
 data/
+
+# Local deploy credentials (do not commit)
+.deploy.local.env
+deploy.local.env
