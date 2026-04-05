@@ -93,25 +93,7 @@ Logos werden an folgenden Stellen angezeigt:
 
 ## Automatisches Freistellen
 
-### Entscheidung: Client-seitige Canvas-Lösung
-
-Nach Evaluation der Optionen wird das Freistellen nun client-seitig per Canvas erledigt:
-
-#### Ablauf:
-1. Logos werden mit `crossorigin="anonymous"` geladen.
-2. Nach dem Laden wird das Bild auf ein Canvas gezeichnet.
-3. Ein Flood-Fill startet an allen Außenkanten und markiert ausschließlich nahezu weiße bzw. transparente Pixel (`rgb > 245`).
-4. Nur die markierten Randbereiche werden transparent gesetzt – Innenbereiche bleiben unverändert.
-5. Das Ergebnis wird als Data-URL ins vorhandene `<img>` zurückgeschrieben. Falls Canvas-Zugriff (CORS) scheitert, bleibt das Original unverändert.
-
-#### Vorteile:
-- ✅ Entfernt weiße Ränder präzise, ohne Farben oder weiße Flächen im Wappen auszuwaschen
-- ✅ Läuft komplett im Browser, kein Server- oder Drittanbieterbedarf
-- ✅ Fallback-freundlich: Wenn CORS den Canvas sperrt, bleibt das Logo einfach im Originalzustand
-
-#### Relevante Selektoren
-Alle Logo-Bildchen werden über `enhanceLogos()` behandelt:
-`.chip-logo`, `.game-modal-team-logo`, `.gli-logo-img`, `.club-search-logo`, `.recent-club-logo`, `.current-club-logo`, `.selected-club-logo`.
+Freistellen ist aktuell deaktiviert. Logos werden unverändert eingeblendet, da frühere CSS-basierte Ansätze (mix-blend/filter) und weitere Experimente unerwünschte Effekte hatten. Sollte künftig wieder eine Freistellung nötig sein, muss ein neuer Ansatz evaluiert und gezielt aktiviert werden.
 
 ## URL-Normalisierung
 
@@ -189,13 +171,12 @@ function toAbsoluteUrl(string $url): string
 2. ✅ Spiel-Detailseiten (sekundär)
 3. ✅ Logo-API mit ID-Extraktion (tertiär)
 
-**Gewählte Freistell-Methode**:
-- ✅ Client-seitige CSS-Filter (`mix-blend-mode: multiply`)
-- ✅ Funktioniert automatisch für weiße Hintergründe
-- ✅ Keine Server-Last, keine externen Services
+**Freistell-Status**:
+- ⏸️ Freistellen derzeit deaktiviert, Logos werden unverändert angezeigt
+- ❗ Frühere CSS-Filter führten zu unerwünschten Effekten
 
 **Resultat**:
 - Robuste, mehrschichtige Logo-Extraktion
-- Automatisches Freistellen ohne Performance-Impact
+- Unveränderte Darstellung der Logos (kein Freistellen aktiv)
 - Gute Trefferquote für Heim- und Gastteam-Logos
 - Wartbare und erweiterbare Implementierung

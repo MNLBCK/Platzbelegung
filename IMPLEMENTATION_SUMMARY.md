@@ -1,4 +1,4 @@
-# Zusammenfassung: Team-/Gegnerlogos robuster extrahieren und automatisch freistellen
+# Zusammenfassung: Team-/Gegnerlogos robuster extrahieren
 
 ## Implementierte Verbesserungen
 
@@ -22,21 +22,10 @@
 - **Robustere ID-Extraktion**: Iteriert durch alle gefundenen Links, bis ein valides ID-Muster gefunden wird
 - **Ergebnis**: Auch wenn direkte Bild-URLs fehlen, werden Logos über die API-URL geladen
 
-### 2. Automatisches Freistellen ohne Farbverlust
+### 2. Freistellen (derzeit deaktiviert)
 
-#### Implementierung (public/app.js)
-- Client-seitiges Canvas-Freistellen: Flood-Fill startet an den Bildrändern und entfernt nur nahezu weiße bzw. transparente Randpixel (RGB > 245)
-- Wappen-Innenflächen bleiben unverändert, sodass Farben und weiße Elemente nicht ausblassen
-- Fallback: Falls CORS den Canvas-Zugriff verhindert, bleibt das Original-Logo sichtbar
-
-#### Betroffene Klassen:
-- `.chip-logo` - Logos in Wochenansicht-Chips
-- `.game-modal-team-logo` - Logos im Spiel-Modal
-- `.gli-logo-img` - Logos in Monatsansicht-Liste
-- `.club-search-logo` - Logos in Vereinssuche
-- `.recent-club-logo` - Logos in "Zuletzt verwendet"
-- `.current-club-logo` - Logo im Header des aktuellen Vereins
-- `.selected-club-logo` - Aktueller Verein im Header-Bereich
+- Frühere CSS-Ansätze (mix-blend/filter) wurden zurückgenommen, da die Ergebnisse unbefriedigend waren.
+- Logos werden aktuell ohne Freistellen ausgeliefert.
 
 ### 3. Umfassende Dokumentation
 
@@ -70,14 +59,9 @@ Enthält:
 - **Sekundärquelle**: Spiel-Detailseiten (höhere Trefferquote)
 - **Tertiärquelle**: fussball.de Logo-API (stabile direkte URL)
 
-### ✅ Dokumentierte Bewertung und Umsetzung des automatischen Freistellens
+### ✅ Dokumentierte Bewertung zum Freistellen
 - **Dokumentiert in**: `docs/logo-extraction.md`, Abschnitt "Automatisches Freistellen"
-- **Evaluierte Optionen**:
-  - ❌ Server-seitige Bildverarbeitung (zu komplex, Performance-Impact)
-  - ❌ Externe Services (Kosten, Datenschutz, Abhängigkeit)
-  - ✅ **Client-seitige CSS-Filter** (gewählte Lösung)
-- **Implementierung**: CSS `mix-blend-mode: multiply` mit Contrast- und Saturation-Filtern
-- **Angewendet auf**: Alle 6 Logo-Anzeigepunkte in der Anwendung
+- **Status**: Freistellen ist derzeit deaktiviert; Logos werden unverändert angezeigt.
 
 ## Technische Details
 
@@ -90,7 +74,7 @@ Enthält:
 
 ### Geänderte Dateien
 1. **backend.php**: Verbesserte Logo-Extraktion
-2. **public/style.css**: CSS-basiertes Background Removal
+2. **public/style.css**: Darstellung der Logos ohne Freistell-Filter
 3. **docs/logo-extraction.md**: Umfassende Dokumentation (NEU)
 
 ### Keine Breaking Changes
@@ -117,10 +101,10 @@ Enthält:
 
 Die Implementierung erfüllt alle Akzeptanzkriterien:
 - ✅ Robustere Logo-Extraktion mit drei Fallback-Stufen
-- ✅ Automatisches Freistellen ohne Server-Last
+- ⏸️ Freistellen aktuell deaktiviert (Logos unverändert)
 - ✅ Umfassende Dokumentation der Entscheidungen
 - ✅ Funktioniert für Heim- und Gastteam-Logos
 - ✅ Alle Tests bestehen
 - ✅ Keine Breaking Changes
 
-**Resultat**: Team- und Gegnerlogos werden jetzt zuverlässiger angezeigt und automatisch freigestellt, was die Benutzererfahrung im Kalender und Modal deutlich verbessert.
+**Resultat**: Team- und Gegnerlogos werden zuverlässiger angezeigt; Freistellen ist deaktiviert, damit Farben unverändert bleiben.

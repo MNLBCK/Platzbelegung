@@ -75,8 +75,6 @@ const DE_DAYS       = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 const DE_DAYS_LONG  = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 const DE_MONTHS     = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 const DE_MONTHS_LONG = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-const LOGO_SELECTOR = '.chip-logo, .game-modal-team-logo, .gli-logo-img, .club-search-logo, .recent-club-logo, .current-club-logo, .selected-club-logo';
-const LOGO_WHITE_THRESHOLD = 245;
 
 // ===================== State =====================
 
@@ -216,110 +214,6 @@ function isSameDay(a, b) {
 
 function fmtFull(date) {
   return String(DE_DAYS_LONG[date.getDay()]) + ', ' + date.getDate() + '. ' + DE_MONTHS_LONG[date.getMonth()] + ' ' + date.getFullYear();
-}
-
-// ===================== Logo Helpers =====================
-
-function createTransparentLogo(img) {
-  const width = img.naturalWidth || img.width;
-  const height = img.naturalHeight || img.height;
-  if (!width || !height) return null;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, width, height);
-
-  let imageData;
-  try {
-    imageData = ctx.getImageData(0, 0, width, height);
-  } catch (_) {
-    return null;
-  }
-
-  const data = imageData.data;
-  const visited = new Uint8Array(width * height);
-  const queue = [];
-
-  const isBackground = (idx) => {
-    const base = idx * 4;
-    const alpha = data[base + 3];
-    if (alpha < 8) return true;
-    const r = data[base];
-    const g = data[base + 1];
-    const b = data[base + 2];
-    return r > LOGO_WHITE_THRESHOLD && g > LOGO_WHITE_THRESHOLD && b > LOGO_WHITE_THRESHOLD;
-  };
-
-  const enqueue = (x, y) => {
-    if (x < 0 || y < 0 || x >= width || y >= height) return;
-    const idx = y * width + x;
-    if (visited[idx] || !isBackground(idx)) return;
-    visited[idx] = 1;
-    queue.push(idx);
-  };
-
-  for (let x = 0; x < width; x++) {
-    enqueue(x, 0);
-    enqueue(x, height - 1);
-  }
-  for (let y = 1; y < height - 1; y++) {
-    enqueue(0, y);
-    enqueue(width - 1, y);
-  }
-
-  while (queue.length) {
-    const idx = queue.pop();
-    const base = idx * 4;
-    data[base + 3] = 0;
-
-    const x = idx % width;
-    const y = (idx / width) | 0;
-    enqueue(x + 1, y);
-    enqueue(x - 1, y);
-    enqueue(x, y + 1);
-    enqueue(x, y - 1);
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-  return canvas.toDataURL('image/png');
-}
-
-function enhanceLogo(img) {
-  if (!img || img.dataset.logoPrepared) return;
-  img.dataset.logoPrepared = '1';
-  if (!img.getAttribute('crossorigin')) {
-    img.crossOrigin = 'anonymous';
-  }
-
-  const processLogo = () => {
-    if (img.dataset.logoProcessed === 'done') return;
-    try {
-      const processed = createTransparentLogo(img);
-      if (processed) {
-        img.src = processed;
-        img.dataset.logoProcessed = 'done';
-        img.style.mixBlendMode = 'normal';
-        img.style.filter = 'none';
-      } else {
-        img.dataset.logoProcessed = 'fallback';
-      }
-    } catch (_) {
-      img.dataset.logoProcessed = 'error';
-    }
-  };
-
-  if (img.complete && img.naturalWidth) {
-    processLogo();
-  } else {
-    img.addEventListener('load', processLogo, { once: true });
-  }
-}
-
-function enhanceLogos(root = document) {
-  if (!root || typeof root.querySelectorAll !== 'function') return;
-  root.querySelectorAll(LOGO_SELECTOR).forEach(enhanceLogo);
 }
 
 function getISOWeek(date) {
@@ -682,7 +576,7 @@ function renderRecentClubs() {
       '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="' + escapeHtml(club.name) + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
       '<span class="recent-club-logo-wrap">' +
       (club.logoUrl
-        ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy" crossorigin="anonymous">'
+        ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
         : '<span class="recent-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>') +
       '</span>' +
       '<span class="recent-club-name">' + escapeHtml(club.name) + '</span>' +
@@ -703,7 +597,6 @@ function renderRecentClubs() {
       if (club) selectClub(club);
     });
   });
-  enhanceLogos(container);
 }
 
 // ===================== Club Selection =====================
@@ -743,7 +636,7 @@ function renderSelectedClub() {
     return;
   }
   const logoHtml = club.logoUrl
-    ? '<img class="selected-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy" crossorigin="anonymous">'
+    ? '<img class="selected-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
     : '<span class="selected-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>';
   const clubUrl = getClubUrl(club);
   el.innerHTML =
@@ -757,7 +650,6 @@ function renderSelectedClub() {
       '</div>' +
     '</div>';
   showEl(el, true);
-  enhanceLogos(el);
 }
 
 function clearClub() {
@@ -794,7 +686,7 @@ function renderClubSearchResults(clubs) {
     '<button class="search-result-item club-search-item" type="button" data-club-id="' + escapeHtml(club.id) + '">' +
     '<span class="club-search-logo-wrap">' +
     (club.logoUrl
-      ? '<img class="club-search-logo" src="' + escapeHtml(club.logoUrl) + '" alt="" crossorigin="anonymous">'
+      ? '<img class="club-search-logo" src="' + escapeHtml(club.logoUrl) + '" alt="">'
       : '<span class="club-search-logo club-search-logo-fallback"></span>') +
     '</span>' +
     '<span class="club-search-copy">' +
@@ -810,7 +702,6 @@ function renderClubSearchResults(clubs) {
     });
   });
   showEl(resultsEl, true);
-  enhanceLogos(resultsEl);
 }
 
 async function doClubSearch(query) {
@@ -1139,14 +1030,12 @@ function renderWeekView() {
         if (logoUrl) {
           const img = document.createElement('img');
           img.className = 'chip-logo';
-          img.crossOrigin = 'anonymous';
           img.src = logoUrl;
           img.alt = opponent;
           img.loading = 'lazy';
           img.addEventListener('error', () => {
             img.remove();
           });
-          enhanceLogo(img);
           chip.appendChild(img);
         }
 
@@ -1170,7 +1059,6 @@ function renderWeekView() {
   const existingLegend = weekView.querySelector('.team-legend');
   if (existingLegend) existingLegend.remove();
   renderLegend(weekGames, weekView);
-  enhanceLogos(weekView);
 }
 
 function renderMonthView() {
@@ -1235,7 +1123,7 @@ function renderMonthView() {
       item.innerHTML =
         '<span class="gli-time">' + escapeHtml(game.time || '--:--') + '</span>' +
         '<span class="gli-logo gli-logo--lean-left">' +
-          (logoUrl ? '<img class="gli-logo-img gli-logo-img--large" src="' + escapeHtml(logoUrl) + '" alt="' + escapeHtml(opponent) + '" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous">' : '') +
+          (logoUrl ? '<img class="gli-logo-img gli-logo-img--large" src="' + escapeHtml(logoUrl) + '" alt="' + escapeHtml(opponent) + '" loading="lazy" referrerpolicy="no-referrer">' : '') +
         '</span>' +
         '<span class="gli-main">' +
           '<span class="gli-main-top">' +
@@ -1255,7 +1143,6 @@ function renderMonthView() {
 
     listEl.appendChild(group);
   });
-  enhanceLogos(listEl);
 }
 
 // ===================== Legend =====================
@@ -1305,12 +1192,12 @@ function showGameModal(game) {
       '<div class="game-modal-body">' +
         '<div class="game-modal-teams game-modal-teams--with-logos">' +
           '<span class="game-modal-team-block">' +
-            (game.homeLogoUrl ? '<img class="game-modal-team-logo" src="' + escapeHtml(game.homeLogoUrl) + '" alt="' + escapeHtml(game.homeTeam) + '" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous">' : '') +
+            (game.homeLogoUrl ? '<img class="game-modal-team-logo" src="' + escapeHtml(game.homeLogoUrl) + '" alt="' + escapeHtml(game.homeTeam) + '" loading="lazy" referrerpolicy="no-referrer">' : '') +
             '<span class="game-modal-home">' + escapeHtml(game.homeTeam) + '</span>' +
           '</span>' +
           '<span class="game-modal-vs">vs.</span>' +
           '<span class="game-modal-team-block">' +
-            (game.guestLogoUrl ? '<img class="game-modal-team-logo" src="' + escapeHtml(game.guestLogoUrl) + '" alt="' + escapeHtml(game.guestTeam) + '" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous">' : '') +
+            (game.guestLogoUrl ? '<img class="game-modal-team-logo" src="' + escapeHtml(game.guestLogoUrl) + '" alt="' + escapeHtml(game.guestTeam) + '" loading="lazy" referrerpolicy="no-referrer">' : '') +
             '<span class="game-modal-guest">' + escapeHtml(game.guestTeam) + '</span>' +
           '</span>' +
         '</div>' +
@@ -1338,7 +1225,6 @@ function showGameModal(game) {
   document.addEventListener('keydown', escHandler);
 
   document.body.appendChild(overlay);
-  enhanceLogos(overlay);
 }
 
 // ===================== View Switching & Navigation =====================
