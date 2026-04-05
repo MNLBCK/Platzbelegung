@@ -156,7 +156,7 @@ DISPLAY_VERSION="$BASE_VERSION"
 RELEASE_VERSION="$BASE_VERSION"
 REPOSITORY_URL="https://github.com/MNLBCK/Platzbelegung"
 DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-BUILD_META_PATH="$(mktemp "${TMPDIR:-/tmp}/platzbelegung-build-meta.XXXXXX.json")"
+BUILD_META_PATH="$ROOT_DIR/BUILD_META.json"
 cleanup() {
   rm -f "$BUILD_META_PATH"
 }
@@ -261,7 +261,7 @@ EOF
     lftp_script+=$'\n'"put -O $DEPLOY_REMOTE_DIR VERSION"
   fi
 
-  lftp_script+=$'\n'"put -O $DEPLOY_REMOTE_DIR -o BUILD_META.json $BUILD_META_PATH"
+  lftp_script+=$'\n'"put -O $DEPLOY_REMOTE_DIR BUILD_META.json"
   lftp_script+=$'\n'"put -O $remote_data_dir data/latest.json"
 
   if is_true "$GENERATE_HTML" && [[ -f "$ROOT_DIR/data/latest.html" ]]; then
