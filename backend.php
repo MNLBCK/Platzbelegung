@@ -7,6 +7,7 @@ const DATA_DIR = __DIR__ . '/data';
 const LATEST_SNAPSHOT = DATA_DIR . '/latest.json';
 const CONFIG_FILE = __DIR__ . '/config.yaml';
 const VERSION_FILE = __DIR__ . '/VERSION';
+const BUILD_META_FILE = __DIR__ . '/BUILD_META.json';
 const APP_REPOSITORY_URL = 'https://github.com/MNLBCK/Platzbelegung';
 const APP_RELEASES_URL = APP_REPOSITORY_URL . '/releases/tag/';
 
@@ -90,18 +91,58 @@ function formatFileMTime(?string $path): ?string
     return gmdate(DATE_ATOM, $mtime);
 }
 
+function loadBuildMeta(): array
+{
+    if (!is_file(BUILD_META_FILE)) {
+        return [];
+    }
+    $raw = file_get_contents(BUILD_META_FILE);
+    if ($raw === false) {
+        return [];
+    }
+    $parsed = json_decode($raw, true);
+    return is_array($parsed) ? $parsed : [];
+}
+
 function loadAppMeta(): array
 {
-    $version = loadAppVersion();
+    $baseVersion = loadAppVersion();
+    $buildMeta = loadBuildMeta();
     $snapshot = loadLatestSnapshot();
     $snapshotGeneratedAt = is_array($snapshot) ? ($snapshot['generated_at'] ?? null) : null;
-    $deployedAt = formatFileMTime(VERSION_FILE) ?? formatFileMTime(LATEST_SNAPSHOT);
+
+    $displayVersion = trim((string)($buildMeta['displayVersion'] ?? $baseVersion));
+    if ($displayVersion === '') {
+        $displayVersion = $baseVersion;
+    }
+
+    $releaseVersion = trim((string)($buildMeta['releaseVersion'] ?? $baseVersion));
+    if ($releaseVersion === '') {
+        $releaseVersion = $baseVersion;
+    }
+
+    $repositoryUrl = trim((string)($buildMeta['repositoryUrl'] ?? APP_REPOSITORY_URL));
+    if ($repositoryUrl === '') {
+        $repositoryUrl = APP_REPOSITORY_URL;
+    }
+
+    $releaseUrl = trim((string)($buildMeta['releaseUrl'] ?? ''));
+    if ($releaseUrl === '') {
+        $releaseUrl = $releaseVersion === 'dev' ? $repositoryUrl : APP_RELEASES_URL . rawurlencode($releaseVersion);
+    }
+
+    $deployedAt = trim((string)($buildMeta['deployedAt'] ?? ''));
+    if ($deployedAt === '') {
+        $deployedAt = formatFileMTime(BUILD_META_FILE) ?? formatFileMTime(VERSION_FILE) ?? formatFileMTime(LATEST_SNAPSHOT) ?? '';
+    }
 
     return [
-        'version' => $version,
-        'repositoryUrl' => APP_REPOSITORY_URL,
-        'releaseUrl' => $version === 'dev' ? APP_REPOSITORY_URL : APP_RELEASES_URL . rawurlencode($version),
-        'deployedAt' => $deployedAt,
+        'version' => $displayVersion,
+        'baseVersion' => $baseVersion,
+        'releaseVersion' => $releaseVersion,
+        'repositoryUrl' => $repositoryUrl,
+        'releaseUrl' => $releaseUrl,
+        'deployedAt' => $deployedAt !== '' ? $deployedAt : null,
         'snapshotGeneratedAt' => is_string($snapshotGeneratedAt) && $snapshotGeneratedAt !== '' ? $snapshotGeneratedAt : null,
     ];
 }

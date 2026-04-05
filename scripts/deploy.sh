@@ -151,6 +151,53 @@ if [[ ! -f "$ROOT_DIR/data/latest.json" ]]; then
   exit 1
 fi
 
+BASE_VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION" 2>/dev/null || printf 'dev')"
+DISPLAY_VERSION="$BASE_VERSION"
+RELEASE_VERSION="$BASE_VERSION"
+REPOSITORY_URL="https://github.com/MNLBCK/Platzbelegung"
+DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+BUILD_META_PATH="$(mktemp "${TMPDIR:-/tmp}/platzbelegung-build-meta.XXXXXX.json")"
+cleanup() {
+  rm -f "$BUILD_META_PATH"
+}
+trap cleanup EXIT
+
+if git -C "$ROOT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+  if git -C "$ROOT_DIR" rev-parse -q --verify "refs/tags/$BASE_VERSION" >/dev/null 2>&1; then
+    COMMITS_SINCE_RELEASE="$(git -C "$ROOT_DIR" rev-list --count "$BASE_VERSION..HEAD")"
+    if [[ "$COMMITS_SINCE_RELEASE" -gt 0 ]]; then
+      DISPLAY_VERSION="${BASE_VERSION}+${COMMITS_SINCE_RELEASE}"
+    fi
+  else
+    LAST_TAG="$(git -C "$ROOT_DIR" describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+    if [[ -n "$LAST_TAG" ]]; then
+      RELEASE_VERSION="$LAST_TAG"
+      COMMITS_SINCE_RELEASE="$(git -C "$ROOT_DIR" rev-list --count "$LAST_TAG..HEAD")"
+      if [[ "$COMMITS_SINCE_RELEASE" -gt 0 ]]; then
+        DISPLAY_VERSION="${BASE_VERSION}+${COMMITS_SINCE_RELEASE}"
+      fi
+    fi
+  fi
+fi
+
+RELEASE_URL="$REPOSITORY_URL"
+if [[ -n "$RELEASE_VERSION" && "$RELEASE_VERSION" != "dev" ]]; then
+  RELEASE_URL="$REPOSITORY_URL/releases/tag/$RELEASE_VERSION"
+fi
+
+python3 - <<PY > "$BUILD_META_PATH"
+import json
+print(json.dumps({
+  "displayVersion": ${DISPLAY_VERSION@Q},
+  "releaseVersion": ${RELEASE_VERSION@Q},
+  "repositoryUrl": ${REPOSITORY_URL@Q},
+  "releaseUrl": ${RELEASE_URL@Q},
+  "deployedAt": ${DEPLOYED_AT@Q},
+}, ensure_ascii=False))
+PY
+
+echo "==> Build-Version: $DISPLAY_VERSION (Release-Basis: $RELEASE_VERSION)"
+
 upload_with_lftp() {
   local protocol="$1"
   local port_part=""
@@ -208,6 +255,7 @@ EOF
     lftp_script+=$'\n'"put -O $DEPLOY_REMOTE_DIR VERSION"
   fi
 
+  lftp_script+=$'\n'"put -O $DEPLOY_REMOTE_DIR -o BUILD_META.json $BUILD_META_PATH"
   lftp_script+=$'\n'"put -O $remote_data_dir data/latest.json"
 
   if is_true "$GENERATE_HTML" && [[ -f "$ROOT_DIR/data/latest.html" ]]; then
@@ -250,6 +298,9 @@ upload_with_rsync() {
     echo "==> Lade VERSION hoch"
     rsync -av -e "$ssh_cmd" "$ROOT_DIR/VERSION" "$remote:$DEPLOY_REMOTE_DIR/VERSION"
   fi
+
+  echo "==> Lade BUILD_META.json hoch"
+  rsync -av -e "$ssh_cmd" "$BUILD_META_PATH" "$remote:$DEPLOY_REMOTE_DIR/BUILD_META.json"
 
   echo "==> Lade data/latest.json hoch"
   rsync -av -e "$ssh_cmd" "$ROOT_DIR/data/latest.json" "$remote:$DEPLOY_REMOTE_DIR/data/latest.json"

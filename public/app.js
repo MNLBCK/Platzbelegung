@@ -121,10 +121,20 @@ function formatMetaDate(value) {
   });
 }
 
+function setTeamOverviewLoading() {
+  const wrap = $('team-overview');
+  const listEl = $('team-overview-list');
+  const summaryEl = $('team-overview-summary');
+  if (!wrap || !listEl || !summaryEl) return;
+  wrap.open = false;
+  listEl.innerHTML = '';
+  summaryEl.textContent = '▸ Mannschaften werden geladen…';
+  showEl(wrap, true);
+}
+
 async function loadAppMeta() {
   const badgeEl = $('app-version-badge');
-  const githubEl = $('header-github-link');
-  if (!badgeEl || !githubEl) return;
+  if (!badgeEl) return;
 
   try {
     const resp = await fetch('/api/meta');
@@ -132,7 +142,6 @@ async function loadAppMeta() {
     if (!resp.ok) return;
 
     const version = String(data.version || '').trim();
-    const repositoryUrl = String(data.repositoryUrl || '').trim();
     const releaseUrl = String(data.releaseUrl || '').trim();
     const deployedAt = formatMetaDate(data.deployedAt || '');
     const snapshotGeneratedAt = formatMetaDate(data.snapshotGeneratedAt || '');
@@ -144,8 +153,6 @@ async function loadAppMeta() {
     if (deployedAt) titleParts.push('Deploy: ' + deployedAt);
     if (snapshotGeneratedAt) titleParts.push('Snapshot: ' + snapshotGeneratedAt);
     if (titleParts.length) badgeEl.title = titleParts.join(' • ');
-
-    if (repositoryUrl) githubEl.href = repositoryUrl;
   } catch (_) {
     badgeEl.textContent = 'dev';
   }
@@ -596,11 +603,20 @@ function renderRecentClubs() {
 
 function selectClub(club) {
   state.club = club;
+  state.games = [];
+  state.venues = [];
+  state.venueShortNames = {};
+  state.loadedFrom = '';
+  state.loadedTo = '';
+  state.selectedVenueIds = null;
   saveClubCookie();
   saveRecentClub(club);
+  saveVenuesCookie();
   renderSelectedClub();
   renderRecentClubs();
   updateSectionVisibility();
+  renderVenueCheckboxes();
+  setTeamOverviewLoading();
   $('club-search-input').value = '';
   const resultsEl = $('club-search-results');
   resultsEl.innerHTML = '';
