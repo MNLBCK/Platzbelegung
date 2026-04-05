@@ -204,6 +204,10 @@ EOF
     lftp_script+=$'\n'"put -O $DEPLOY_REMOTE_DIR .htaccess"
   fi
 
+  if [[ -f "$ROOT_DIR/VERSION" ]]; then
+    lftp_script+=$'\n'"put -O $DEPLOY_REMOTE_DIR VERSION"
+  fi
+
   lftp_script+=$'\n'"put -O $remote_data_dir data/latest.json"
 
   if is_true "$GENERATE_HTML" && [[ -f "$ROOT_DIR/data/latest.html" ]]; then
@@ -240,6 +244,11 @@ upload_with_rsync() {
   if is_true "$UPLOAD_HTACCESS" && [[ -f "$ROOT_DIR/.htaccess" ]]; then
     echo "==> Lade .htaccess hoch"
     rsync -av -e "$ssh_cmd" "$ROOT_DIR/.htaccess" "$remote:$DEPLOY_REMOTE_DIR/.htaccess"
+  fi
+
+  if [[ -f "$ROOT_DIR/VERSION" ]]; then
+    echo "==> Lade VERSION hoch"
+    rsync -av -e "$ssh_cmd" "$ROOT_DIR/VERSION" "$remote:$DEPLOY_REMOTE_DIR/VERSION"
   fi
 
   echo "==> Lade data/latest.json hoch"

@@ -6,6 +6,8 @@ const FUSSBALL_DE_BASE = 'https://www.fussball.de';
 const DATA_DIR = __DIR__ . '/data';
 const LATEST_SNAPSHOT = DATA_DIR . '/latest.json';
 const CONFIG_FILE = __DIR__ . '/config.yaml';
+const VERSION_FILE = __DIR__ . '/VERSION';
+const APP_REPOSITORY_URL = 'https://github.com/MNLBCK/Platzbelegung';
 
 function isHeadRequest(): bool
 {
@@ -64,6 +66,23 @@ function loadConfig(): ?array
     if ($out === null) return null;
     $parsed = json_decode($out, true);
     return is_array($parsed) ? $parsed : null;
+}
+
+function loadAppVersion(): string
+{
+    if (!is_file(VERSION_FILE)) {
+        return 'dev';
+    }
+    $raw = trim((string)file_get_contents(VERSION_FILE));
+    return $raw !== '' ? $raw : 'dev';
+}
+
+function loadAppMeta(): array
+{
+    return [
+        'version' => loadAppVersion(),
+        'repositoryUrl' => APP_REPOSITORY_URL,
+    ];
 }
 
 function saveConfig(array $config): bool
@@ -335,6 +354,11 @@ if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/'))
         $snapshot = loadLatestSnapshot();
         if (!$snapshot) jsonResponse(['error' => 'Kein Snapshot vorhanden. Bitte zuerst "platzbelegung scrape" ausführen.'], 404);
         else jsonResponse($snapshot);
+        return;
+    }
+
+    if ($uri === '/api/meta') {
+        jsonResponse(loadAppMeta());
         return;
     }
 

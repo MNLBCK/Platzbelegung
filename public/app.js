@@ -108,6 +108,28 @@ function showError(msg) {
   showEl(el, !!msg);
 }
 
+async function loadAppMeta() {
+  const badgeEl = $('app-version-badge');
+  const githubEl = $('header-github-link');
+  if (!badgeEl || !githubEl) return;
+
+  try {
+    const resp = await fetch('/api/meta');
+    const data = await resp.json();
+    if (!resp.ok) return;
+
+    const version = String(data.version || '').trim();
+    const repositoryUrl = String(data.repositoryUrl || '').trim();
+
+    if (version) badgeEl.textContent = version;
+    else badgeEl.textContent = 'dev';
+
+    if (repositoryUrl) githubEl.href = repositoryUrl;
+  } catch (_) {
+    badgeEl.textContent = 'dev';
+  }
+}
+
 function escapeHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;')
@@ -308,11 +330,12 @@ function getVisibleVenues() {
 // ===================== Team Category Helpers =====================
 
 function deriveTeamCategory(game) {
-  const text = (game.competition || '') + ' ' + (game.homeTeam || '');
-  if (/\bBambini\b/i.test(text)) return 'Bambini';
-  const junioren = text.match(/\b([A-G])[-\s]Junior(?:en|innen)\b/i);
-  if (junioren) return junioren[1].toUpperCase() + '-Junioren';
-  const u = text.match(/\bU\s*(\d+)\b/i);
+  const text = ((game.competition || '') + ' ' + (game.homeTeam || '') + ' ' + (game.guestTeam || '')).toLowerCase();
+  if (/\bbambini\b/.test(text)) return 'Bambini';
+  if (/\bdamen\b|\bfrauen\b/.test(text)) return 'Damen';
+  const juniorinnen = text.match(/\b([a-g])[-\s]junior(?:en|innen)\b/i);
+  if (juniorinnen) return juniorinnen[1].toUpperCase() + '-Junioren';
+  const u = text.match(/\bu\s*(\d+)\b/i);
   if (u) {
     const age = parseInt(u[1], 10);
     if (age <= 7)  return 'G-Junioren';
@@ -323,9 +346,8 @@ function deriveTeamCategory(game) {
     if (age <= 17) return 'B-Junioren';
     if (age <= 19) return 'A-Junioren';
   }
-  if (/\bHerren\b/i.test(text))   return 'Herren';
-  if (/\bDamen\b/i.test(text))    return 'Damen';
-  if (/\bSenioren\b/i.test(text)) return 'Senioren';
+  if (/\bherren\b/.test(text))   return 'Herren';
+  if (/\bsenioren\b/.test(text)) return 'Senioren';
   return 'Sonstige';
 }
 
@@ -374,6 +396,91 @@ function getOpponentLogoUrl(game) {
     if (wordRe.test(gtLow)) return game.homeLogoUrl  || '';
   }
   return game.guestLogoUrl || '';
+}
+
+function getClubUrl(club) {
+  if (!club || !club.id) return '';
+  if (club.url) return club.url;
+  return 'https://www.fussball.de/verein/-/id/' + encodeURIComponent(club.id) + '#!/';
+}
+
+function getGameResult(game) {
+  const result = String(game.result || '').trim();
+  if (!result || result === '-:-') return '';
+  const start = new Date(game.startDate || '');
+  if (isNaN(start.getTime()) || start > new Date()) return '';
+  return result;
+}
+
+function getTeamSortRank(entry) {
+  const text = ((entry.competition || '') + ' ' + (entry.team || '')).toLowerCase();
+  if (/\bherren\b/.test(text)) return 0;
+  if (/\bdamen\b/.test(text)) return 1;
+  if (/\ba-junior/.test(text) || /\bu19\b/.test(text)) return 2;
+  if (/\bb-junior/.test(text) || /\bu17\b/.test(text)) return 3;
+  if (/\bc-junior/.test(text) || /\bu15\b/.test(text)) return 4;
+  if (/\bd-junior/.test(text) || /\bu13\b/.test(text)) return 5;
+  if (/\be-junior/.test(text) || /\bu11\b/.test(text)) return 6;
+  if (/\bf-junior/.test(text) || /\bu9\b/.test(text)) return 7;
+  if (/\bg-junior/.test(text) || /\bbambini\b|\bu7\b/.test(text)) return 8;
+  return 9;
+}
+
+function getTeamEntries() {
+  const seen = new Map();
+  const entries = [];
+  state.games.forEach(game => {
+    const team = game.homeTeam || game.guestTeam || '';
+    const competition = game.competition || '';
+    const key = (team + '|' + competition).toLowerCase();
+    if (!team || seen.has(key)) return;
+    seen.set(key, true);
+    entries.push({ team, competition });
+  });
+  entries.sort((a, b) => {
+    const rankDiff = getTeamSortRank(a) - getTeamSortRank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return a.team.localeCompare(b.team, 'de');
+  });
+  return entries;
+}
+
+function renderTeamOverview() {
+  const wrap = $('team-overview');
+  const listEl = $('team-overview-list');
+  const summaryEl = $('team-overview-summary');
+  if (!wrap || !listEl || !summaryEl) return;
+  if (!state.club || !state.club.id || !state.games.length) {
+    wrap.open = false;
+    showEl(wrap, false);
+    listEl.innerHTML = '';
+    summaryEl.textContent = '▸ Mannschaften';
+    return;
+  }
+  const teams = getTeamEntries();
+  const isOpen = wrap.hasAttribute('open');
+  summaryEl.textContent = (isOpen ? '▾ ' : '▸ ') + teams.length + ' Mannschaften';
+  listEl.innerHTML =
+    '<div class="team-overview-table team-overview-table--head">' +
+      '<span>Team</span>' +
+      '<span>Spielklasse</span>' +
+    '</div>' +
+    teams.map(entry =>
+      '<div class="team-overview-table">' +
+        '<span class="team-overview-name">' + escapeHtml(entry.team) + '</span>' +
+        '<span class="team-overview-comp">' + escapeHtml(entry.competition || '–') + '</span>' +
+      '</div>'
+    ).join('');
+  wrap.ontoggle = () => {
+    summaryEl.textContent = (wrap.open ? '▾ ' : '▸ ') + teams.length + ' Mannschaften';
+  };
+  showEl(wrap, teams.length > 0);
+}
+
+function updateSectionVisibility() {
+  const hasClub = !!(state.club && state.club.id);
+  showEl($('section-spielstaetten'), hasClub);
+  showEl($('section-kalender'), hasClub);
 }
 
 // ===================== Cookie Persistence =====================
@@ -432,10 +539,13 @@ function renderRecentClubs() {
   if (!list.length) { showEl(container, false); return; }
   showEl(container, true);
   container.innerHTML =
-    '<div class="recent-clubs-label">Zuletzt verwendet:</div>' +
+    '<div class="recent-clubs-head">' +
+      '<div class="recent-clubs-label">Zuletzt verwendet:</div>' +
+      '<button type="button" class="recent-clubs-reset" id="recent-clubs-reset">zurücksetzen</button>' +
+    '</div>' +
     '<div class="recent-clubs-list">' +
     list.map(club =>
-      '<button class="recent-club-btn' + (state.club && state.club.id === club.id ? ' recent-club-btn--active' : '') + '" type="button" data-club-id="' + escapeHtml(club.id) + '" title="' + escapeHtml(club.name) + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
+      '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="' + escapeHtml(club.name) + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
       '<span class="recent-club-logo-wrap">' +
       (club.logoUrl
         ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
@@ -445,6 +555,14 @@ function renderRecentClubs() {
       '</button>'
     ).join('') +
     '</div>';
+  const resetBtn = $('recent-clubs-reset');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      deleteCookie(COOKIE_RECENT);
+      clearClub();
+      renderRecentClubs();
+    });
+  }
   container.querySelectorAll('[data-club-id]').forEach(button => {
     button.addEventListener('click', () => {
       const club = list.find(c => c.id === button.dataset.clubId);
@@ -461,7 +579,8 @@ function selectClub(club) {
   saveRecentClub(club);
   renderSelectedClub();
   renderRecentClubs();
-  $('club-search-input').value = club.name || '';
+  updateSectionVisibility();
+  $('club-search-input').value = '';
   const resultsEl = $('club-search-results');
   resultsEl.innerHTML = '';
   showEl(resultsEl, false);
@@ -472,10 +591,17 @@ function renderSelectedClub() {
   const el = $('selected-club-info');
   if (!el) return;
   const club = state.club;
-  if (!club) { showEl(el, false); el.innerHTML = ''; return; }
+  if (!club) {
+    el.innerHTML =
+      '<div class="selected-club-label">Ausgewählter Verein</div>' +
+      '<div class="selected-club-card selected-club-card--empty">Bitte Verein auswählen</div>';
+    showEl(el, true);
+    return;
+  }
   const logoHtml = club.logoUrl
     ? '<img class="selected-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
     : '<span class="selected-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>';
+  const clubUrl = getClubUrl(club);
   el.innerHTML =
     '<div class="selected-club-label">Ausgewählter Verein</div>' +
     '<div class="selected-club-card">' +
@@ -483,7 +609,7 @@ function renderSelectedClub() {
       '<div class="selected-club-details">' +
         '<div class="selected-club-name">' + escapeHtml(club.name) + '</div>' +
         (club.location ? '<div class="selected-club-location">' + escapeHtml(club.location) + '</div>' : '') +
-        (club.url ? '<div class="selected-club-link"><a href="' + escapeHtml(club.url) + '" target="_blank" rel="noopener noreferrer">fussball.de &#8599;</a></div>' : '') +
+        (clubUrl ? '<div class="selected-club-link"><a href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">Verein auf fussball.de &#8599;</a></div>' : '') +
       '</div>' +
     '</div>';
   showEl(el, true);
@@ -502,6 +628,7 @@ function clearClub() {
   sessionStorage.removeItem(SESSION_KEY);
   renderSelectedClub();
   renderVenueCheckboxes();
+  updateSectionVisibility();
   $('club-search-input').value = '';
   showEl($('week-view'), false);
   showEl($('month-view'), false);
@@ -577,6 +704,7 @@ async function autoLoadGames() {
     updateVenueShortNames();
     reconcileVenueSelection();
     renderVenueCheckboxes();
+    renderTeamOverview();
     renderCurrentView();
     return;
   }
@@ -615,6 +743,7 @@ async function fetchGames(dateFrom, dateTo) {
     reconcileVenueSelection();
     saveSession();
     renderVenueCheckboxes();
+    renderTeamOverview();
     renderCurrentView();
   } catch (err) {
     showError('Netzwerkfehler: ' + err.message);
@@ -652,6 +781,7 @@ async function extendDateRangeAndReload(newFrom, newTo) {
     reconcileVenueSelection();
     saveSession();
     renderVenueCheckboxes();
+    renderTeamOverview();
     renderCurrentView();
   } catch (_) {
     // silent fail
@@ -853,6 +983,12 @@ function renderWeekView() {
 
         const opponent    = getOpponent(game);
         const logoUrl     = getOpponentLogoUrl(game);
+        const result      = getGameResult(game);
+
+        const timeEl = document.createElement('div');
+        timeEl.className = 'chip-time';
+        timeEl.textContent = game.time || '';
+        chip.appendChild(timeEl);
 
         if (logoUrl) {
           const img = document.createElement('img');
@@ -862,23 +998,16 @@ function renderWeekView() {
           img.loading = 'lazy';
           img.addEventListener('error', () => {
             img.remove();
-            const fb = document.createElement('span');
-            fb.className = 'chip-logo-fallback';
-            fb.textContent = (opponent || '?').charAt(0).toUpperCase();
-            chip.insertBefore(fb, chip.firstChild);
           });
           chip.appendChild(img);
-        } else {
-          const fallback = document.createElement('span');
-          fallback.className = 'chip-logo-fallback';
-          fallback.textContent = (opponent || '?').charAt(0).toUpperCase();
-          chip.appendChild(fallback);
         }
 
-        const timeEl = document.createElement('div');
-        timeEl.className = 'chip-time';
-        timeEl.textContent = game.time || '';
-        chip.appendChild(timeEl);
+        if (result) {
+          const resultEl = document.createElement('div');
+          resultEl.className = 'chip-result';
+          resultEl.textContent = result;
+          chip.appendChild(resultEl);
+        }
 
         chip.addEventListener('click', () => showGameModal(game));
         cell.appendChild(chip);
@@ -929,64 +1058,53 @@ function renderMonthView() {
   // Legend for team categories visible in this month (at top)
   renderLegend(monthGames, listEl);
 
-  // Group by ISO week
-  const byWeek = new Map();
+  const byDay = new Map();
   monthGames.forEach(game => {
-    const d         = new Date(game.startDate);
-    const weekStart = getMonday(d);
-    const key       = formatInputDate(weekStart);
-    if (!byWeek.has(key)) byWeek.set(key, { weekStart, games: [] });
-    byWeek.get(key).games.push(game);
+    const key = fmtFull(new Date(game.startDate));
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(game);
   });
 
-  byWeek.forEach(({ weekStart, games }) => {
-    const weekEnd    = addDays(weekStart, 6);
-    const weekHeader = document.createElement('div');
-    weekHeader.className = 'month-week-header';
-    weekHeader.textContent =
-      'KW\u00a0' + getISOWeek(weekStart) +
-      ' \u00b7 ' + weekStart.getDate() + '.\u00a0' + DE_MONTHS[weekStart.getMonth()] +
-      ' \u2013 ' + weekEnd.getDate() + '.\u00a0' + DE_MONTHS[weekEnd.getMonth()];
-    listEl.appendChild(weekHeader);
+  byDay.forEach((dayGames, label) => {
+    const group = document.createElement('div');
+    group.className = 'day-group';
+    group.innerHTML = '<div class="day-group-header">' + escapeHtml(label) + '</div>';
 
-    const byDay = new Map();
-    games.forEach(game => {
-      const key = fmtFull(new Date(game.startDate));
-      if (!byDay.has(key)) byDay.set(key, []);
-      byDay.get(key).push(game);
-    });
-
-    byDay.forEach((dayGames, label) => {
-      const group = document.createElement('div');
-      group.className = 'day-group';
-      group.innerHTML = '<div class="day-group-header">' + escapeHtml(label) + '</div>';
-
-      dayGames.forEach(game => {
-        const vid      = deriveVenueId(game);
-        const vColor   = venueColor(vid);
-        const catColor = teamCategoryColor(game);
-        const shortV   = getVenueShortNameForGame(game);
-        const opponent = getOpponent(game);
-        const item     = document.createElement('div');
-        item.className = 'game-list-item';
-        item.style.borderLeft = '4px solid ' + catColor;
-        item.style.cursor = 'pointer';
-        item.innerHTML =
-          '<span class="gli-time">' + escapeHtml(game.time || '--:--') + '</span>' +
-          '<span class="gli-venue">' +
-            '<span class="dot" style="background:' + vColor + '"></span>' +
-            '<span title="' + escapeHtml(game.venueName || '') + '">' + escapeHtml(shortV) + '</span>' +
-          '</span>' +
-          '<span class="gli-teams">' +
+    dayGames.forEach(game => {
+      const vid      = deriveVenueId(game);
+      const vColor   = venueColor(vid);
+      const catColor = teamCategoryColor(game);
+      const shortV   = getVenueShortNameForGame(game);
+      const longV    = game.venueName || shortV;
+      const opponent = getOpponent(game);
+      const logoUrl  = getOpponentLogoUrl(game);
+      const category = deriveTeamCategory(game);
+      const item     = document.createElement('div');
+      item.className = 'game-list-item game-list-item--lean';
+      item.style.borderLeft = '4px solid ' + catColor;
+      item.style.cursor = 'pointer';
+      item.innerHTML =
+        '<span class="gli-time">' + escapeHtml(game.time || '--:--') + '</span>' +
+        '<span class="gli-logo gli-logo--lean-left">' +
+          (logoUrl ? '<img class="gli-logo-img gli-logo-img--large" src="' + escapeHtml(logoUrl) + '" alt="' + escapeHtml(opponent) + '" loading="lazy" referrerpolicy="no-referrer">' : '') +
+        '</span>' +
+        '<span class="gli-main">' +
+          '<span class="gli-main-top">' +
+            '<span class="gli-category-chip gli-category-chip--rect" style="background:' + catColor + '">' + escapeHtml(category) + '</span>' +
+            '<span class="gli-vs">vs</span>' +
             '<span class="gli-opponent">' + escapeHtml(opponent) + '</span>' +
           '</span>' +
-          '<span class="gli-comp" style="color:' + catColor + ';font-weight:600">' + escapeHtml(game.competition || '') + '</span>';
-        item.addEventListener('click', () => showGameModal(game));
-        group.appendChild(item);
-      });
-
-      listEl.appendChild(group);
+          '<span class="gli-venue gli-venue--lean">' +
+            '<span class="dot" style="background:' + vColor + '"></span>' +
+            '<span class="gli-venue-short" title="' + escapeHtml(longV) + '">' + escapeHtml(shortV) + '</span>' +
+            '<span class="gli-venue-long" title="' + escapeHtml(longV) + '">' + escapeHtml(longV) + '</span>' +
+          '</span>' +
+        '</span>';
+      item.addEventListener('click', () => showGameModal(game));
+      group.appendChild(item);
     });
+
+    listEl.appendChild(group);
   });
 }
 
@@ -1035,16 +1153,23 @@ function showGameModal(game) {
         '<button class="game-modal-close" aria-label="Schlie\u00dfen">&times;</button>' +
       '</div>' +
       '<div class="game-modal-body">' +
-        '<div class="game-modal-teams">' +
-          '<span class="game-modal-home">' + escapeHtml(game.homeTeam) + '</span>' +
+        '<div class="game-modal-teams game-modal-teams--with-logos">' +
+          '<span class="game-modal-team-block">' +
+            (game.homeLogoUrl ? '<img class="game-modal-team-logo" src="' + escapeHtml(game.homeLogoUrl) + '" alt="' + escapeHtml(game.homeTeam) + '" loading="lazy" referrerpolicy="no-referrer">' : '') +
+            '<span class="game-modal-home">' + escapeHtml(game.homeTeam) + '</span>' +
+          '</span>' +
           '<span class="game-modal-vs">vs.</span>' +
-          '<span class="game-modal-guest">' + escapeHtml(game.guestTeam) + '</span>' +
+          '<span class="game-modal-team-block">' +
+            (game.guestLogoUrl ? '<img class="game-modal-team-logo" src="' + escapeHtml(game.guestLogoUrl) + '" alt="' + escapeHtml(game.guestTeam) + '" loading="lazy" referrerpolicy="no-referrer">' : '') +
+            '<span class="game-modal-guest">' + escapeHtml(game.guestTeam) + '</span>' +
+          '</span>' +
         '</div>' +
         '<div class="game-modal-meta">' +
           '<div class="game-modal-meta-row">\uD83D\uDCC5\u2002' + escapeHtml(fmtFull(new Date(game.startDate))) + '</div>' +
           '<div class="game-modal-meta-row">\uD83D\uDD50\u2002' + escapeHtml(game.time || '--:--') + ' Uhr</div>' +
           (game.competition ? '<div class="game-modal-meta-row">\uD83C\uDFC6\u2002' + escapeHtml(game.competition) + '</div>' : '') +
           (game.venueName ? '<div class="game-modal-meta-row">\uD83D\uDCCD\u2002' + escapeHtml(game.venueName) + '</div>' : '') +
+          (game.gameUrl ? '<div class="game-modal-meta-row"><a class="game-modal-maps-link" href="' + escapeHtml(game.gameUrl) + '" target="_blank" rel="noopener noreferrer">Spiel auf fussball.de &#8599;</a></div>' : '') +
         '</div>' +
       '</div>' +
     '</div>';
@@ -1164,14 +1289,16 @@ function bindEvents() {
 // ===================== Init =====================
 
 async function init() {
+  await loadAppMeta();
   loadFromCookies();
-  $('club-search-input').value = state.club ? (state.club.name || '') : '';
+  $('club-search-input').value = '';
   const today = new Date();
   state.currentWeekStart = getMonday(today);
   state.currentMonth     = new Date(today.getFullYear(), today.getMonth(), 1);
 
   renderSelectedClub();
   renderRecentClubs();
+  updateSectionVisibility();
   bindEvents();
 
   $('view-week-btn').classList.toggle('btn-active', state.view === 'week');
@@ -1181,6 +1308,7 @@ async function init() {
     await autoLoadGames();
   } else {
     renderVenueCheckboxes();
+    renderTeamOverview();
     showEl($('no-games-msg'), true);
     $('current-period-label').textContent = '';
   }

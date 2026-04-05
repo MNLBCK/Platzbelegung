@@ -12,6 +12,10 @@
       <div class="header-title">
         <h1>⚽ Platzbelegung</h1>
       </div>
+      <div class="header-meta" id="header-meta">
+        <span class="version-badge" id="app-version-badge">Version lädt…</span>
+        <a class="header-github-link" id="header-github-link" href="https://github.com/MNLBCK/Platzbelegung" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      </div>
     </div>
   </header>
 
@@ -37,10 +41,14 @@
       </div>
       <div id="club-search-results" class="search-results hidden"></div>
       <div id="selected-club-info" class="selected-club-info hidden"></div>
+      <details id="team-overview" class="team-overview hidden">
+        <summary><span id="team-overview-summary">▸ Mannschaften</span></summary>
+        <div id="team-overview-list" class="team-overview-list"></div>
+      </details>
     </section>
 
     <!-- Section 2: Spielstätten -->
-    <section class="panel section-step" id="section-spielstaetten">
+    <section class="panel section-step hidden" id="section-spielstaetten">
       <h2 class="section-title">
         <span class="section-num">2</span> Spielstätten
         <span class="tooltip-wrap">
@@ -57,16 +65,16 @@
     </section>
 
     <!-- Section 3: Belegungskalender -->
-    <section class="panel" id="section-kalender">
+    <section class="panel hidden" id="section-kalender">
       <div class="panel-header">
         <div class="panel-header-top">
           <h2 class="section-title">
             <span class="section-num">3</span> Belegungskalender
           </h2>
-        </div>
-        <div class="view-controls">
-          <button class="btn btn-sm btn-active" id="view-week-btn">Woche</button>
-          <button class="btn btn-sm" id="view-month-btn">Monat</button>
+          <div class="view-controls">
+            <button class="btn btn-sm btn-active" id="view-week-btn">Woche</button>
+            <button class="btn btn-sm" id="view-month-btn">Monat</button>
+          </div>
         </div>
         <div class="nav-controls">
           <button class="btn btn-sm" id="prev-period-btn" aria-label="Zurück">&#8249;</button>
@@ -105,7 +113,7 @@
       Kein offizielles Angebot des DFB.
     </p>
     <p>
-      Quellcode: <a href="https://github.com/mnlbck/platz" target="_blank" rel="noopener noreferrer">github.com/mnlbck/platz</a>
+      Quellcode: <a href="https://github.com/MNLBCK/Platzbelegung" target="_blank" rel="noopener noreferrer">github.com/MNLBCK/Platzbelegung</a>
     </p>
   </footer>
 
