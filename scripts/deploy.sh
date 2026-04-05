@@ -185,14 +185,20 @@ if [[ -n "$RELEASE_VERSION" && "$RELEASE_VERSION" != "dev" ]]; then
   RELEASE_URL="$REPOSITORY_URL/releases/tag/$RELEASE_VERSION"
 fi
 
-python3 - <<PY > "$BUILD_META_PATH"
+DISPLAY_VERSION="$DISPLAY_VERSION" \
+RELEASE_VERSION="$RELEASE_VERSION" \
+REPOSITORY_URL="$REPOSITORY_URL" \
+RELEASE_URL="$RELEASE_URL" \
+DEPLOYED_AT="$DEPLOYED_AT" \
+python3 - <<'PY' > "$BUILD_META_PATH"
 import json
+import os
 print(json.dumps({
-  "displayVersion": ${DISPLAY_VERSION@Q},
-  "releaseVersion": ${RELEASE_VERSION@Q},
-  "repositoryUrl": ${REPOSITORY_URL@Q},
-  "releaseUrl": ${RELEASE_URL@Q},
-  "deployedAt": ${DEPLOYED_AT@Q},
+  "displayVersion": os.environ["DISPLAY_VERSION"],
+  "releaseVersion": os.environ["RELEASE_VERSION"],
+  "repositoryUrl": os.environ["REPOSITORY_URL"],
+  "releaseUrl": os.environ["RELEASE_URL"],
+  "deployedAt": os.environ["DEPLOYED_AT"],
 }, ensure_ascii=False))
 PY
 
