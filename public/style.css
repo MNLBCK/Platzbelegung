@@ -23,6 +23,7 @@
   --radius:     8px;
   --shadow:     0 2px 8px rgba(0,0,0,.12);
   --shadow-md:  0 4px 16px rgba(0,0,0,.16);
+  --club-logo-size: 40px;
 }
 
 body {
@@ -542,21 +543,21 @@ main {
   background: var(--white);
 }
 .recent-club-logo-wrap {
-  width: 40px;
-  height: 40px;
+  width: var(--club-logo-size);
+  height: var(--club-logo-size);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 .recent-club-logo {
-  width: 40px;
-  height: 40px;
+  width: var(--club-logo-size);
+  height: var(--club-logo-size);
   object-fit: contain;
 }
 .recent-club-logo-fallback {
-  width: 40px;
-  height: 40px;
+  width: var(--club-logo-size);
+  height: var(--club-logo-size);
   border-radius: 50%;
   background: var(--primary-l);
   color: var(--primary-d);
@@ -1051,13 +1052,13 @@ main {
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  min-height: 62px;
+  min-height: 76px;
   justify-content: center;
 }
 .game-chip:hover { filter: brightness(1.12); }
 .chip-logo {
-  width: 26px;
-  height: 26px;
+  width: var(--club-logo-size);
+  height: var(--club-logo-size);
   object-fit: contain;
   border-radius: 2px;
   background: rgba(255,255,255,0.12);
@@ -1065,8 +1066,8 @@ main {
   flex-shrink: 0;
 }
 .chip-logo-fallback {
-  width: 26px;
-  height: 26px;
+  width: var(--club-logo-size);
+  height: var(--club-logo-size);
   border-radius: 2px;
   background: rgba(255,255,255,0.2);
   display: flex;
@@ -1229,17 +1230,17 @@ main {
   height: 30px;
 }
 .gli-logo--lean-left {
-  width: 40px;
-  height: 40px;
+  width: var(--club-logo-size);
+  height: var(--club-logo-size);
 }
 .gli-logo-img {
-  width: 28px;
-  height: 28px;
+  width: var(--club-logo-size);
+  height: var(--club-logo-size);
   object-fit: contain;
 }
 .gli-logo-img--large {
-  width: 34px;
-  height: 34px;
+  width: var(--club-logo-size);
+  height: var(--club-logo-size);
 }
 .gli-result {
   font-weight: 700;
