@@ -140,10 +140,84 @@ php -S 0.0.0.0:3210 backend.php
 
 ### Deployment
 
-Für ein Hosting auf einem Webserver (z.B. Render, Railway, Fly.io, VPS):
+#### Variante A: eigener Server / VPS
+
+Für ein Hosting auf einem Webserver (z.B. VPS, Render, Railway, Fly.io):
 1. Repo deployen
 2. Sicherstellen, dass `data/latest.json` vorhanden ist (z.B. per Cronjob via Python-Scraper) oder den Scraper separat deployen
 3. `php -S 0.0.0.0:3210 backend.php` starten (oder äquivalent via Prozessmanager)
+
+#### Variante B: Shared Hosting / Webspace mit FTP-Upload
+
+Für klassisches Webhosting ohne dauerhaft laufende Python- oder Node-Prozesse kann die Anwendung ebenfalls betrieben werden. Der typische Ablauf ist:
+
+1. **Projekt lokal vorbereiten**
+   - Python-Abhängigkeiten lokal installieren
+   - `config.yaml` mit Vereins-ID, Saison und Sportstätten pflegen
+   - Snapshot lokal erzeugen:
+
+   ```bash
+   platzbelegung scrape
+   ```
+
+   Dadurch entsteht insbesondere `data/latest.json`.
+
+2. **Dateien auf den Server hochladen**
+   - per **FTP/SFTP** in das Zielverzeichnis der Domain oder Subdomain hochladen, z.B. `platzbelegung.sghochx.de`
+   - mindestens diese Dateien/Ordner werden benötigt:
+     - `backend.php`
+     - `public/`
+     - `data/latest.json`
+     - optional `data/latest.html`
+     - `config.yaml` (nur nötig, wenn die Web-UI Konfigurationen lesen/ändern soll)
+
+3. **Document Root auf `public/` zeigen lassen**
+   - idealerweise zeigt die Domain/Subdomain direkt auf den Ordner `public/`
+   - falls der Hoster keinen separaten Document Root pro Subdomain erlaubt, müssen `public/index.html`, `public/app.js` und `public/style.css` im Webroot liegen und Requests an `backend.php` weitergeleitet werden
+
+4. **PHP aktivieren**
+   - erforderlich ist PHP **8.1 oder neuer**
+   - `backend.php` muss im Zielsystem ausgeführt werden können
+
+5. **Snapshot regelmäßig aktualisieren**
+   - auf einfachem Shared Hosting läuft der Python-Scraper oft **nicht dauerhaft direkt auf dem Server**
+   - daher gibt es zwei praxistaugliche Wege:
+     - **lokal oder auf einem anderen Host scrapen** und anschließend `data/latest.json` per FTP/SFTP hochladen
+     - falls beim Hoster Python + Cronjobs verfügbar sind, den Scraper direkt dort per Cron ausführen
+
+#### Beispiel: lokale Aktualisierung + FTP-Upload
+
+Ein typischer manueller Release-/Update-Ablauf sieht so aus:
+
+```bash
+# lokal neue Daten holen
+platzbelegung scrape
+
+# danach die erzeugte Datei hochladen
+# hochzuladen ist mindestens: data/latest.json
+```
+
+Wenn der Hoster kein SSH anbietet, genügt bereits ein FTP-Client wie FileZilla, Cyberduck oder das Deployment-Tool des Providers.
+
+#### Empfohlene Struktur auf dem Server
+
+Beispiel für eine Subdomain wie `platzbelegung.sghochx.de`:
+
+```text
+/home/<user>/platzbelegung/
+├── backend.php
+├── config.yaml
+├── data/
+│   └── latest.json
+└── public/
+    ├── index.html
+    ├── app.js
+    └── style.css
+```
+
+#### Wichtiger Hinweis zu Shared Hosting
+
+Die Weboberfläche selbst läuft mit statischen Dateien + PHP sehr gut auf klassischem Hosting. Der **Scraping-Teil** ist getrennt gedacht und kann bei Bedarf extern laufen. Genau deshalb ist `data/latest.json` das zentrale Austauschformat zwischen Scraper und Webserver.
 
 ## Projektstruktur
 
