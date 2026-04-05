@@ -260,6 +260,28 @@ function parseGameDetail(string $url): array
     }
     $logos = array_values(array_unique(array_filter($logos)));
 
+    // If we still don't have logos, try to extract club IDs from links
+    if (count($logos) < 2) {
+        $clubIds = [];
+        foreach ([
+            'string(//*[contains(@class,"team") and contains(@class,"home")]//a[contains(@href,"/verein/") or contains(@href,"/mannschaft/")][1]/@href)',
+            'string(//*[contains(@class,"team") and contains(@class,"guest")]//a[contains(@href,"/verein/") or contains(@href,"/mannschaft/")][1]/@href)',
+            'string(//*[contains(@class,"club") and contains(@class,"home")]//a[contains(@href,"/verein/") or contains(@href,"/mannschaft/")][1]/@href)',
+            'string(//*[contains(@class,"club") and contains(@class,"guest")]//a[contains(@href,"/verein/") or contains(@href,"/mannschaft/")][1]/@href)',
+        ] as $expr) {
+            $href = $xpath->evaluate($expr);
+            if ($href !== '' && preg_match('~/id/([^/?#]+)~', $href, $m)) {
+                $clubIds[] = 'https://www.fussball.de/export.media/-/action/getLogo/format/7/id/' . $m[1];
+            }
+        }
+        // Merge extracted club IDs with existing logos
+        foreach ($clubIds as $id) {
+            if (!in_array($id, $logos, true)) {
+                $logos[] = $id;
+            }
+        }
+    }
+
     $result = '';
     foreach ([
         'string(//*[contains(@class,"result")][1])',
@@ -320,24 +342,37 @@ function parseClubMatchplanHtml(string $html): array
 
         $extractLogo = function(?DOMNode $cell) use ($xpath): string {
             if (!$cell) return '';
+
+            // Try to get image from src attribute
             $img = $xpath->evaluate('string(.//img[1]/@src)', $cell);
             if ($img === '') {
+                // Fallback to data-src (lazy load)
                 $img = $xpath->evaluate('string(.//img[1]/@data-src)', $cell);
             }
             if ($img === '') {
+                // Fallback to srcset (responsive images)
                 $srcset = $xpath->evaluate('string(.//img[1]/@srcset)', $cell);
                 if ($srcset !== '') {
                     $img = preg_split('/\s+/', trim($srcset))[0] ?? '';
                 }
             }
             if ($img !== '') return toAbsoluteUrl($img);
-            $href = $xpath->evaluate('string(.//*[contains(@class,"club-wrapper")][1]/@href)', $cell);
-            if ($href === '') {
-                $href = $xpath->evaluate('string(.//a[1]/@href)', $cell);
+
+            // If no image found, try to extract club/team ID from links
+            // Try multiple link patterns for better robustness
+            $hrefs = [
+                $xpath->evaluate('string(.//*[contains(@class,"club-wrapper")][1]/@href)', $cell),
+                $xpath->evaluate('string(.//*[contains(@class,"club-name")][1]/../@href)', $cell),
+                $xpath->evaluate('string(.//a[contains(@href,"/verein/") or contains(@href,"/mannschaft/")][1]/@href)', $cell),
+                $xpath->evaluate('string(.//a[1]/@href)', $cell),
+            ];
+
+            foreach ($hrefs as $href) {
+                if ($href !== '' && preg_match('~/id/([^/?#]+)~', $href, $m)) {
+                    return 'https://www.fussball.de/export.media/-/action/getLogo/format/7/id/' . $m[1];
+                }
             }
-            if (preg_match('~/id/([^/?#]+)~', $href, $m)) {
-                return 'https://www.fussball.de/export.media/-/action/getLogo/format/7/id/' . $m[1];
-            }
+
             return '';
         };
 
