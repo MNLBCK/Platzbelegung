@@ -234,13 +234,19 @@ header {
   justify-content: space-between;
   gap: 1rem;
 }
-.header-title { flex: 1; }
+.header-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .header-meta {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+  gap: 0.32rem;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 .version-badge {
   display: inline-flex;
@@ -250,10 +256,11 @@ header {
   background: rgba(255,255,255,0.12);
   color: rgba(255,255,255,0.95);
   border: 1px solid rgba(255,255,255,0.2);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-decoration: none;
+  white-space: nowrap;
 }
 .version-badge:hover {
   color: #fff;
@@ -267,9 +274,10 @@ header {
 .header-github-link {
   color: rgba(255,255,255,0.92);
   text-decoration: none;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.78rem;
+  font-weight: 700;
   padding: 0.2rem 0;
+  white-space: nowrap;
 }
 .header-github-link:hover {
   color: #fff;
@@ -1315,8 +1323,9 @@ footer a { color: var(--primary); }
   }
   .header-meta {
     justify-content: flex-start;
-    align-items: flex-start;
-    gap: 0.35rem;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: 0;
   }
   header h1 { font-size: 1.5rem; }
   .header-sub { font-size: 0.78rem; }
