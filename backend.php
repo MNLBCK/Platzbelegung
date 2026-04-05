@@ -8,6 +8,7 @@ const LATEST_SNAPSHOT = DATA_DIR . '/latest.json';
 const CONFIG_FILE = __DIR__ . '/config.yaml';
 const VERSION_FILE = __DIR__ . '/VERSION';
 const APP_REPOSITORY_URL = 'https://github.com/MNLBCK/Platzbelegung';
+const APP_RELEASES_URL = APP_REPOSITORY_URL . '/releases/tag/';
 
 function isHeadRequest(): bool
 {
@@ -77,11 +78,31 @@ function loadAppVersion(): string
     return $raw !== '' ? $raw : 'dev';
 }
 
+function formatFileMTime(?string $path): ?string
+{
+    if (!$path || !is_file($path)) {
+        return null;
+    }
+    $mtime = filemtime($path);
+    if ($mtime === false) {
+        return null;
+    }
+    return gmdate(DATE_ATOM, $mtime);
+}
+
 function loadAppMeta(): array
 {
+    $version = loadAppVersion();
+    $snapshot = loadLatestSnapshot();
+    $snapshotGeneratedAt = is_array($snapshot) ? ($snapshot['generated_at'] ?? null) : null;
+    $deployedAt = formatFileMTime(VERSION_FILE) ?? formatFileMTime(LATEST_SNAPSHOT);
+
     return [
-        'version' => loadAppVersion(),
+        'version' => $version,
         'repositoryUrl' => APP_REPOSITORY_URL,
+        'releaseUrl' => $version === 'dev' ? APP_REPOSITORY_URL : APP_RELEASES_URL . rawurlencode($version),
+        'deployedAt' => $deployedAt,
+        'snapshotGeneratedAt' => is_string($snapshotGeneratedAt) && $snapshotGeneratedAt !== '' ? $snapshotGeneratedAt : null,
     ];
 }
 

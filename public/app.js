@@ -108,6 +108,19 @@ function showError(msg) {
   showEl(el, !!msg);
 }
 
+function formatMetaDate(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 async function loadAppMeta() {
   const badgeEl = $('app-version-badge');
   const githubEl = $('header-github-link');
@@ -120,9 +133,17 @@ async function loadAppMeta() {
 
     const version = String(data.version || '').trim();
     const repositoryUrl = String(data.repositoryUrl || '').trim();
+    const releaseUrl = String(data.releaseUrl || '').trim();
+    const deployedAt = formatMetaDate(data.deployedAt || '');
+    const snapshotGeneratedAt = formatMetaDate(data.snapshotGeneratedAt || '');
 
-    if (version) badgeEl.textContent = version;
-    else badgeEl.textContent = 'dev';
+    badgeEl.textContent = version || 'dev';
+    if (releaseUrl) badgeEl.href = releaseUrl;
+
+    const titleParts = [];
+    if (deployedAt) titleParts.push('Deploy: ' + deployedAt);
+    if (snapshotGeneratedAt) titleParts.push('Snapshot: ' + snapshotGeneratedAt);
+    if (titleParts.length) badgeEl.title = titleParts.join(' • ');
 
     if (repositoryUrl) githubEl.href = repositoryUrl;
   } catch (_) {
