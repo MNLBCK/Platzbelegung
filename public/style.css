@@ -450,9 +450,6 @@ main {
   width: 44px;
   height: 44px;
   object-fit: contain;
-  /* Automatic background removal for logos with white backgrounds */
-  filter: contrast(1.1) saturate(1.15);
-  mix-blend-mode: multiply;
 }
 .club-search-logo-fallback {
   width: 44px;
@@ -487,9 +484,6 @@ main {
   object-fit: contain;
   border-radius: 4px;
   flex-shrink: 0;
-  /* Automatic background removal for logos with white backgrounds */
-  filter: contrast(1.1) saturate(1.15);
-  mix-blend-mode: multiply;
 }
 .current-club-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -559,9 +553,6 @@ main {
   width: 40px;
   height: 40px;
   object-fit: contain;
-  /* Automatic background removal for logos with white backgrounds */
-  filter: contrast(1.1) saturate(1.15);
-  mix-blend-mode: multiply;
 }
 .recent-club-logo-fallback {
   width: 40px;
@@ -1072,9 +1063,6 @@ main {
   background: rgba(255,255,255,0.12);
   display: block;
   flex-shrink: 0;
-  /* Automatic background removal for logos with white backgrounds */
-  filter: contrast(1.1) saturate(1.15);
-  mix-blend-mode: multiply;
 }
 .chip-logo-fallback {
   width: 26px;
@@ -1190,9 +1178,6 @@ main {
   height: 32px;
   object-fit: contain;
   flex-shrink: 0;
-  /* Automatic background removal for logos with white backgrounds */
-  filter: contrast(1.1) saturate(1.15);
-  mix-blend-mode: multiply;
 }
 .game-modal-vs { color: var(--text-light); font-weight: 400; }
 .game-modal-meta {
@@ -1251,9 +1236,6 @@ main {
   width: 28px;
   height: 28px;
   object-fit: contain;
-  /* Automatic background removal for logos with white backgrounds */
-  filter: contrast(1.1) saturate(1.15);
-  mix-blend-mode: multiply;
 }
 .gli-logo-img--large {
   width: 34px;
