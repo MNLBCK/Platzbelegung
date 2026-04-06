@@ -450,7 +450,7 @@ function getGameResult(game) {
 // ===================== Past Game Result Lookup =====================
 
 const RESULT_GRACE_HOURS = 3;
-const _resultCache = new Map(); // gameUrl → null (in-progress/no result) | {result, homeLogoUrl, guestLogoUrl}
+const resultCache = new Map(); // gameUrl → null (in-progress/no result) | {result, homeLogoUrl, guestLogoUrl}
 
 /**
  * Returns true if this game might have a result that is not yet loaded.
@@ -458,7 +458,7 @@ const _resultCache = new Map(); // gameUrl → null (in-progress/no result) | {r
  */
 function gameMightHaveResult(game) {
   if (!game.gameUrl) return false;
-  if (_resultCache.has(game.gameUrl)) return false;
+  if (resultCache.has(game.gameUrl)) return false;
   const r = String(game.result || '').trim();
   if (r && r !== '-:-') return false;
   const start = new Date(game.startDate || '');
@@ -467,8 +467,8 @@ function gameMightHaveResult(game) {
 }
 
 async function fetchGameResult(gameUrl) {
-  if (_resultCache.has(gameUrl)) return _resultCache.get(gameUrl);
-  _resultCache.set(gameUrl, null); // mark as in-progress
+  if (resultCache.has(gameUrl)) return resultCache.get(gameUrl);
+  resultCache.set(gameUrl, null); // mark as in-progress
   try {
     const resp = await fetch('/api/game-result?gameUrl=' + encodeURIComponent(gameUrl));
     if (!resp.ok) return null;
@@ -480,11 +480,12 @@ async function fetchGameResult(gameUrl) {
         homeLogoUrl: String(data.homeLogoUrl || '').trim(),
         guestLogoUrl: String(data.guestLogoUrl || '').trim(),
       };
-      _resultCache.set(gameUrl, resultData);
+      resultCache.set(gameUrl, resultData);
       return resultData;
     }
     return null;
-  } catch (_) {
+  } catch (err) {
+    console.warn('fetchGameResult: Fehler beim Laden des Spielergebnisses:', err);
     return null;
   }
 }
@@ -496,8 +497,6 @@ async function fetchGameResult(gameUrl) {
 async function triggerResultLookups(games) {
   const targets = games.filter(gameMightHaveResult);
   if (!targets.length) return;
-  // Mark all as in-progress before async fetches to prevent duplicate triggers
-  targets.forEach(g => { if (!_resultCache.has(g.gameUrl)) _resultCache.set(g.gameUrl, null); });
   const results = await Promise.all(targets.map(g => fetchGameResult(g.gameUrl)));
   let anyChanged = false;
   targets.forEach((game, i) => {
