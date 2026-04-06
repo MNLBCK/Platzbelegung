@@ -1194,8 +1194,27 @@ main {
   text-decoration: none;
 }
 .game-modal-maps-link:hover { text-decoration: underline; }
+.game-modal-result {
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+  background: rgba(255,255,255,0.25);
+  padding: 0.15rem 0.55rem;
+  border-radius: 5px;
+  white-space: nowrap;
+}
 
 /* List view */
+.gli-result-badge {
+  font-weight: 700;
+  font-size: 0.75rem;
+  background: var(--primary);
+  color: var(--white);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .day-group { margin-bottom: 1.2rem; }
 .day-group-header {
   background: linear-gradient(90deg, var(--primary-l) 0%, #f0f7f0 100%);

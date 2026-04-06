@@ -447,6 +447,76 @@ function getGameResult(game) {
   return result;
 }
 
+// ===================== Past Game Result Lookup =====================
+
+const RESULT_GRACE_HOURS = 3;
+const _resultCache = new Map(); // gameUrl → null (in-progress/no result) | {result, homeLogoUrl, guestLogoUrl}
+
+/**
+ * Returns true if this game might have a result that is not yet loaded.
+ * Criteria: no current result, game started > RESULT_GRACE_HOURS ago, gameUrl present.
+ */
+function gameMightHaveResult(game) {
+  if (!game.gameUrl) return false;
+  if (_resultCache.has(game.gameUrl)) return false;
+  const r = String(game.result || '').trim();
+  if (r && r !== '-:-') return false;
+  const start = new Date(game.startDate || '');
+  if (isNaN(start.getTime())) return false;
+  return (Date.now() - start.getTime()) > RESULT_GRACE_HOURS * 3600000;
+}
+
+async function fetchGameResult(gameUrl) {
+  if (_resultCache.has(gameUrl)) return _resultCache.get(gameUrl);
+  _resultCache.set(gameUrl, null); // mark as in-progress
+  try {
+    const resp = await fetch('/api/game-result?gameUrl=' + encodeURIComponent(gameUrl));
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const r = String(data.result || '').trim();
+    if (r && r !== '-:-') {
+      const resultData = {
+        result: r,
+        homeLogoUrl: String(data.homeLogoUrl || '').trim(),
+        guestLogoUrl: String(data.guestLogoUrl || '').trim(),
+      };
+      _resultCache.set(gameUrl, resultData);
+      return resultData;
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Fetches results for all games that might have one, updates state.games in-place,
+ * and re-renders the calendar once if any results were found.
+ */
+async function triggerResultLookups(games) {
+  const targets = games.filter(gameMightHaveResult);
+  if (!targets.length) return;
+  // Mark all as in-progress before async fetches to prevent duplicate triggers
+  targets.forEach(g => { if (!_resultCache.has(g.gameUrl)) _resultCache.set(g.gameUrl, null); });
+  const results = await Promise.all(targets.map(g => fetchGameResult(g.gameUrl)));
+  let anyChanged = false;
+  targets.forEach((game, i) => {
+    const rd = results[i];
+    if (!rd || !rd.result || rd.result === '-:-') return;
+    const existing = String(game.result || '').trim();
+    if (!existing || existing === '-:-') {
+      game.result = rd.result;
+      anyChanged = true;
+    }
+    if (!game.homeLogoUrl && rd.homeLogoUrl) game.homeLogoUrl = rd.homeLogoUrl;
+    if (!game.guestLogoUrl && rd.guestLogoUrl) game.guestLogoUrl = rd.guestLogoUrl;
+  });
+  if (anyChanged) {
+    saveSession();
+    renderCurrentView();
+  }
+}
+
 function getTeamSortRank(entry) {
   const text = ((entry.competition || '') + ' ' + (entry.team || '')).toLowerCase();
   if (/\bherren\b/.test(text)) return 0;
@@ -1276,6 +1346,9 @@ function renderWeekView() {
   const existingLegend = weekView.querySelector('.team-legend');
   if (existingLegend) existingLegend.remove();
   renderLegend(weekGames, weekView);
+
+  // Async: fetch results for past games that might have a result
+  triggerResultLookups(weekGames);
 }
 
 function renderMonthView() {
@@ -1333,6 +1406,7 @@ function renderMonthView() {
       const opponent = getOpponent(game);
       const logoUrl  = getOpponentLogoUrl(game);
       const category = deriveTeamCategory(game);
+      const result   = getGameResult(game);
       const item     = document.createElement('div');
       item.className = 'game-list-item game-list-item--lean';
       item.style.borderLeft = '4px solid ' + catColor;
@@ -1347,6 +1421,7 @@ function renderMonthView() {
             '<span class="gli-category-chip gli-category-chip--rect" style="background:' + catColor + '">' + escapeHtml(category) + '</span>' +
             '<span class="gli-vs">vs</span>' +
             '<span class="gli-opponent">' + escapeHtml(opponent) + '</span>' +
+            (result ? '<span class="gli-result-badge">' + escapeHtml(result) + '</span>' : '') +
           '</span>' +
           '<span class="gli-venue gli-venue--lean">' +
             '<span class="dot" style="background:' + vColor + '"></span>' +
@@ -1360,6 +1435,9 @@ function renderMonthView() {
 
     listEl.appendChild(group);
   });
+
+  // Async: fetch results for past games that might have a result
+  triggerResultLookups(monthGames);
 }
 
 // ===================== Legend =====================
@@ -1393,6 +1471,7 @@ function showGameModal(game) {
 
   const category = deriveTeamCategory(game);
   const catColor = TEAM_CATEGORY_COLORS[category] || TEAM_CATEGORY_COLORS['Sonstige'];
+  const result   = getGameResult(game);
 
   const overlay = document.createElement('div');
   overlay.id = 'game-modal-overlay';
@@ -1404,6 +1483,7 @@ function showGameModal(game) {
     '<div class="game-modal">' +
       '<div class="game-modal-header" style="background:' + catColor + '">' +
         '<span class="game-modal-category">' + escapeHtml(category) + '</span>' +
+        (result ? '<span class="game-modal-result">' + escapeHtml(result) + '</span>' : '') +
         '<button class="game-modal-close" aria-label="Schlie\u00dfen">&times;</button>' +
       '</div>' +
       '<div class="game-modal-body">' +

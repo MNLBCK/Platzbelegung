@@ -669,6 +669,26 @@ if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/'))
         return;
     }
 
+    if ($uri === '/api/game-result') {
+        $gameUrl = trim((string)($query['gameUrl'] ?? ''));
+        if ($gameUrl === '') {
+            jsonResponse(['error' => 'gameUrl parameter required'], 400);
+            return;
+        }
+        // Only allow fussball.de game URLs to prevent SSRF
+        if (!preg_match('#^https://(?:www\.)?fussball\.de/spiel/#i', $gameUrl)) {
+            jsonResponse(['error' => 'Invalid game URL. Must be a fussball.de game URL.'], 400);
+            return;
+        }
+        try {
+            $detail = parseGameDetail($gameUrl);
+            jsonResponse($detail);
+        } catch (Throwable $e) {
+            jsonResponse(['error' => 'Fehler beim Laden des Spielergebnisses'], 502);
+        }
+        return;
+    }
+
     if ($uri === '/api/admin/club-parse-stats') {
         $providedPassword = (string)($query['password'] ?? '');
         $expectedPassword = loadStatsPassword();
