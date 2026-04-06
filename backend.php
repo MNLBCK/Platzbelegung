@@ -8,6 +8,8 @@ const LATEST_SNAPSHOT = DATA_DIR . '/latest.json';
 const CONFIG_FILE = __DIR__ . '/config.yaml';
 const VERSION_FILE = __DIR__ . '/VERSION';
 const BUILD_META_FILE = __DIR__ . '/BUILD_META.json';
+const USAGE_STATS_FILE = DATA_DIR . '/club_parse_stats.json';
+const STATS_PASSWORD_FILE = __DIR__ . '/.stats_password';
 const APP_REPOSITORY_URL = 'https://github.com/MNLBCK/Platzbelegung';
 const APP_RELEASES_URL = APP_REPOSITORY_URL . '/releases/tag/';
 
@@ -144,6 +146,132 @@ function loadAppMeta(): array
         'releaseUrl' => $releaseUrl,
         'deployedAt' => $deployedAt !== '' ? $deployedAt : null,
         'snapshotGeneratedAt' => is_string($snapshotGeneratedAt) && $snapshotGeneratedAt !== '' ? $snapshotGeneratedAt : null,
+    ];
+}
+
+function extractPostalCode(?string $location): string
+{
+    $location = normalizeText($location);
+    if ($location === '') {
+        return '';
+    }
+    if (preg_match('/\b(\d{5})\b/', $location, $m)) {
+        return $m[1];
+    }
+    return '';
+}
+
+function loadStatsPassword(): string
+{
+    $envPassword = trim((string)getenv('PLATZBELEGUNG_STATS_PASSWORD'));
+    if ($envPassword !== '') {
+        return $envPassword;
+    }
+    if (!is_file(STATS_PASSWORD_FILE)) {
+        return '';
+    }
+    $raw = trim((string)file_get_contents(STATS_PASSWORD_FILE));
+    return $raw;
+}
+
+function loadUsageStats(): array
+{
+    if (!is_file(USAGE_STATS_FILE)) {
+        return ['updatedAt' => null, 'clubs' => []];
+    }
+    $raw = file_get_contents(USAGE_STATS_FILE);
+    if ($raw === false) {
+        return ['updatedAt' => null, 'clubs' => []];
+    }
+    $parsed = json_decode($raw, true);
+    if (!is_array($parsed)) {
+        return ['updatedAt' => null, 'clubs' => []];
+    }
+    $clubs = $parsed['clubs'] ?? [];
+    if (!is_array($clubs)) {
+        $clubs = [];
+    }
+    return ['updatedAt' => $parsed['updatedAt'] ?? null, 'clubs' => $clubs];
+}
+
+function saveUsageStats(array $stats): bool
+{
+    if (!is_dir(DATA_DIR) && !mkdir(DATA_DIR, 0775, true) && !is_dir(DATA_DIR)) {
+        return false;
+    }
+    $json = json_encode($stats, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+    return file_put_contents(USAGE_STATS_FILE, $json . PHP_EOL, LOCK_EX) !== false;
+}
+
+function recordClubParse(string $clubId, string $clubName = '', string $clubLogoUrl = '', string $clubLocation = ''): void
+{
+    $clubId = trim($clubId);
+    if ($clubId === '') {
+        return;
+    }
+
+    $stats = loadUsageStats();
+    $clubs = $stats['clubs'] ?? [];
+    $entry = is_array($clubs[$clubId] ?? null) ? $clubs[$clubId] : [];
+
+    $existingLocation = normalizeText((string)($entry['location'] ?? ''));
+    $resolvedLocation = normalizeText($clubLocation);
+    if ($resolvedLocation === '' && $existingLocation !== '') {
+        $resolvedLocation = $existingLocation;
+    }
+
+    $entry['id'] = $clubId;
+    $entry['name'] = $clubName !== '' ? $clubName : (string)($entry['name'] ?? '');
+    $entry['logoUrl'] = $clubLogoUrl !== '' ? $clubLogoUrl : (string)($entry['logoUrl'] ?? '');
+    $entry['location'] = $resolvedLocation;
+    $entry['postalCode'] = extractPostalCode($resolvedLocation);
+    $entry['parses'] = ((int)($entry['parses'] ?? 0)) + 1;
+    $entry['lastParsedAt'] = gmdate(DATE_ATOM);
+
+    $clubs[$clubId] = $entry;
+    $stats['clubs'] = $clubs;
+    $stats['updatedAt'] = gmdate(DATE_ATOM);
+    saveUsageStats($stats);
+}
+
+function buildStatsResponse(array $stats): array
+{
+    $clubs = [];
+    foreach (($stats['clubs'] ?? []) as $club) {
+        if (!is_array($club)) {
+            continue;
+        }
+        $clubs[] = [
+            'id' => (string)($club['id'] ?? ''),
+            'name' => (string)($club['name'] ?? ''),
+            'logoUrl' => (string)($club['logoUrl'] ?? ''),
+            'postalCode' => (string)($club['postalCode'] ?? ''),
+            'location' => (string)($club['location'] ?? ''),
+            'parses' => (int)($club['parses'] ?? 0),
+            'lastParsedAt' => $club['lastParsedAt'] ?? null,
+        ];
+    }
+    usort($clubs, function(array $a, array $b): int {
+        $cmp = ($b['parses'] ?? 0) <=> ($a['parses'] ?? 0);
+        if ($cmp !== 0) {
+            return $cmp;
+        }
+        return strcmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+    });
+
+    $totalParses = 0;
+    foreach ($clubs as $club) {
+        $totalParses += (int)($club['parses'] ?? 0);
+    }
+
+    return [
+        'updatedAt' => $stats['updatedAt'] ?? null,
+        'totalClubs' => count($clubs),
+        'totalParses' => $totalParses,
+        'clubs' => $clubs,
     ];
 }
 
@@ -523,16 +651,36 @@ if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/'))
         $dateTo = (string)($query['dateTo'] ?? '');
         $matchType = isset($query['matchType']) ? (int)$query['matchType'] : 1;
         $max = isset($query['max']) ? (int)$query['max'] : 100;
+        $clubName = trim((string)($query['clubName'] ?? ''));
+        $clubLogoUrl = trim((string)($query['clubLogoUrl'] ?? ''));
+        $clubLocation = trim((string)($query['clubLocation'] ?? ''));
         if ($id === '') { jsonResponse(['error' => 'Vereins-ID erforderlich.'], 400); return; }
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) { jsonResponse(['error' => 'dateFrom muss im Format YYYY-MM-DD angegeben werden.'], 400); return; }
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) { jsonResponse(['error' => 'dateTo muss im Format YYYY-MM-DD angegeben werden.'], 400); return; }
         $max = min(max($max, 1), 200);
         $url = FUSSBALL_DE_BASE . '/ajax.club.matchplan/-/id/' . rawurlencode($id) . '/mode/PAGE/show-filter/false/max/' . rawurlencode((string)$max) . '/datum-von/' . rawurlencode($dateFrom) . '/datum-bis/' . rawurlencode($dateTo) . '/match-type/' . rawurlencode((string)$matchType) . '/show-venues/checked/offset/0';
         try {
-            jsonResponse(parseClubMatchplanHtml(httpGet($url)));
+            $games = parseClubMatchplanHtml(httpGet($url));
+            recordClubParse($id, $clubName, $clubLogoUrl, $clubLocation);
+            jsonResponse($games);
         } catch (Throwable $e) {
             jsonResponse(['error' => 'Fehler beim Laden des Vereinsspielplans'], 502);
         }
+        return;
+    }
+
+    if ($uri === '/api/admin/club-parse-stats') {
+        $providedPassword = (string)($query['password'] ?? '');
+        $expectedPassword = loadStatsPassword();
+        if ($expectedPassword === '') {
+            jsonResponse(['error' => 'Stats-Passwort ist nicht konfiguriert.'], 503);
+            return;
+        }
+        if (!hash_equals($expectedPassword, $providedPassword)) {
+            jsonResponse(['error' => 'Unauthorized'], 401);
+            return;
+        }
+        jsonResponse(buildStatsResponse(loadUsageStats()));
         return;
     }
 
