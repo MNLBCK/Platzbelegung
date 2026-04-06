@@ -73,3 +73,4 @@ data/
 # Local deploy credentials (do not commit)
 .deploy.local.env
 deploy.local.env
+.stats_password

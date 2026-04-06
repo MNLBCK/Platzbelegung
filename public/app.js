@@ -803,11 +803,16 @@ async function autoLoadGames() {
   await fetchGames(dateFrom, dateTo);
 }
 
-async function fetchGamesForClub(clubId, dateFrom, dateTo) {
+async function fetchGamesForClub(club, dateFrom, dateTo) {
+  const clubId = club && club.id ? club.id : '';
+  if (!clubId) return [];
   const url =
     '/api/club-matchplan?id=' + encodeURIComponent(clubId) +
     '&dateFrom=' + encodeURIComponent(dateFrom) +
     '&dateTo=' + encodeURIComponent(dateTo) +
+    '&clubName=' + encodeURIComponent(club.name || '') +
+    '&clubLogoUrl=' + encodeURIComponent(club.logoUrl || '') +
+    '&clubLocation=' + encodeURIComponent(club.location || '') +
     '&matchType=1&max=100';
   try {
     const resp = await fetch(url);
@@ -826,10 +831,10 @@ async function fetchGames(dateFrom, dateTo) {
   showEl($('venues-empty'), false);
   showEl($('venues-error'), false);
   showError('');
-  showLoading(true);
+    showLoading(true);
   try {
     const results = await Promise.all(
-      allClubs.map(club => fetchGamesForClub(club.id, dateFrom, dateTo))
+      allClubs.map(club => fetchGamesForClub(club, dateFrom, dateTo))
     );
     const gameKey = g => `${g.startDate}|${g.venueId || ''}|${g.homeTeam || ''}|${g.guestTeam || ''}`;
     const seen = new Set();
@@ -867,7 +872,7 @@ async function extendDateRangeAndReload(newFrom, newTo) {
   showLoading(true);
   try {
     const results = await Promise.all(
-      allClubs.map(club => fetchGamesForClub(club.id, newFrom, newTo))
+      allClubs.map(club => fetchGamesForClub(club, newFrom, newTo))
     );
     const newGames = results.flat();
     const gameKey = g => `${g.startDate}|${g.venueId || ''}|${g.homeTeam || ''}|${g.guestTeam || ''}`;
