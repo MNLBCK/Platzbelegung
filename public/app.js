@@ -442,6 +442,7 @@ function getClubUrl(club) {
 function getGameResult(game) {
   const result = String(game.result || '').trim();
   if (!result || result === '-:-') return '';
+  if (!/^\d{1,2}:\d{1,2}$/.test(result)) return '';
   const start = new Date(game.startDate || '');
   if (isNaN(start.getTime()) || start > new Date()) return '';
   return result;
@@ -454,13 +455,14 @@ const resultCache = new Map(); // gameUrl → null (in-progress/no result) | {re
 
 /**
  * Returns true if this game might have a result that is not yet loaded.
- * Criteria: no current result, game started > RESULT_GRACE_HOURS ago, gameUrl present.
+ * Criteria: no valid result yet, game started > RESULT_GRACE_HOURS ago, gameUrl present.
  */
 function gameMightHaveResult(game) {
   if (!game.gameUrl) return false;
   if (resultCache.has(game.gameUrl)) return false;
   const r = String(game.result || '').trim();
-  if (r && r !== '-:-') return false;
+  // Only treat it as "already has result" if it's a properly formatted score
+  if (r && r !== '-:-' && /^\d{1,2}:\d{1,2}$/.test(r)) return false;
   const start = new Date(game.startDate || '');
   if (isNaN(start.getTime())) return false;
   return (Date.now() - start.getTime()) > RESULT_GRACE_HOURS * 3600000;

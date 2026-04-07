@@ -505,12 +505,12 @@ function parseClubMatchplanHtml(string $html): array
         };
 
         $scoreText = normalizeText($xpath->evaluate('string(.//td[contains(@class,"column-score") or contains(@class,"column-result")][1])', $row));
-        if ($scoreText !== '' && !preg_match('/^(\d{1,2}:\d{2}|\d{2}:\d{2})$/', $scoreText)) {
+        if ($scoreText !== '') {
             if (preg_match('/(\d{1,2}:\d{1,2}|-:-)/', $scoreText, $sm)) {
                 $scoreText = $sm[1];
+            } else {
+                $scoreText = '';
             }
-        } else {
-            $scoreText = '';
         }
 
         $gameUrl = toAbsoluteUrl((string)($xpath->evaluate('string(.//a[contains(normalize-space(.),"Zum Spiel")][1]/@href)', $row) ?: ''));
