@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "platzbelegung"
-version = "0.1.5"
+version = "0.1.6"
 description = "Fußball-Platzbelegungs-Übersicht – liest Daten von fussball.de aus und stellt die Belegung von Sportplätzen übersichtlich dar."
 readme = "README.md"
 requires-python = ">=3.10"
