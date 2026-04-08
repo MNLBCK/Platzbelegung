@@ -461,23 +461,73 @@ function getTeamSortRank(entry) {
   return 9;
 }
 
+function extractAgeClass(competition) {
+  const comp = String(competition || '').trim();
+  if (!comp) return '';
+  const ageClass = comp.split('|')[0];
+  return String(ageClass || '').trim();
+}
+
+function formatCompetitionHint(ageClass, competitions) {
+  const unique = Array.from(new Set((competitions || []).filter(Boolean)));
+  if (!unique.length) return ageClass || '–';
+  if (unique.length === 1) return unique[0];
+  const details = unique
+    .map(comp => {
+      const parts = comp.split('|').map(p => p.trim()).filter(Boolean);
+      return parts[1] || parts[0] || comp;
+    })
+    .filter(Boolean);
+  const detailText = Array.from(new Set(details)).join(', ');
+  const prefix = ageClass || extractAgeClass(unique[0]) || 'Mehrere Wettbewerbe';
+  return prefix + ' | mehrere Wettbewerbe' + (detailText ? ' (' + detailText + ')' : '');
+}
+
 function getTeamEntries() {
-  const seen = new Map();
-  const entries = [];
+  const grouped = new Map();
   state.games.forEach(game => {
     const team = game.homeTeam || game.guestTeam || '';
     const competition = game.competition || '';
-    const key = (team + '|' + competition).toLowerCase();
-    if (!team || seen.has(key)) return;
-    seen.set(key, true);
-    entries.push({ team, competition });
+    const ageClass = extractAgeClass(competition);
+    const key = (team + '|' + ageClass).toLowerCase();
+    if (!team) return;
+    if (!grouped.has(key)) {
+      grouped.set(key, { team, ageClass, competitions: [] });
+    }
+    const entry = grouped.get(key);
+    if (competition) entry.competitions.push(competition);
   });
+  const entries = Array.from(grouped.values()).map(entry => ({
+    team: entry.team,
+    competition: formatCompetitionHint(entry.ageClass, entry.competitions),
+  }));
   entries.sort((a, b) => {
     const rankDiff = getTeamSortRank(a) - getTeamSortRank(b);
     if (rankDiff !== 0) return rankDiff;
     return a.team.localeCompare(b.team, 'de');
   });
   return entries;
+}
+
+function getGameDedupKey(game) {
+  const startDate = String(game.startDate || '').trim();
+  const venueId = String(game.venueId || '').trim();
+  const home = String(game.homeTeam || '').trim();
+  const guest = String(game.guestTeam || '').trim();
+  const competition = String(game.competition || '').trim();
+  return [startDate, venueId, home, guest, competition].join('|').toLowerCase();
+}
+
+function dedupeGames(games) {
+  const seen = new Set();
+  const merged = [];
+  (games || []).forEach(game => {
+    const key = getGameDedupKey(game);
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(game);
+  });
+  return merged;
 }
 
 function renderTeamOverview() {
@@ -836,13 +886,7 @@ async function fetchGames(dateFrom, dateTo) {
     const results = await Promise.all(
       allClubs.map(club => fetchGamesForClub(club, dateFrom, dateTo))
     );
-    const gameKey = g => `${g.startDate}|${g.venueId || ''}|${g.homeTeam || ''}|${g.guestTeam || ''}`;
-    const seen = new Set();
-    const merged = [];
-    results.flat().forEach(g => {
-      const key = gameKey(g);
-      if (!seen.has(key)) { seen.add(key); merged.push(g); }
-    });
+    const merged = dedupeGames(results.flat());
     merged.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
     state.games = merged;
     state.loadedFrom = dateFrom;
@@ -874,10 +918,9 @@ async function extendDateRangeAndReload(newFrom, newTo) {
     const results = await Promise.all(
       allClubs.map(club => fetchGamesForClub(club, newFrom, newTo))
     );
-    const newGames = results.flat();
-    const gameKey = g => `${g.startDate}|${g.venueId || ''}|${g.homeTeam || ''}|${g.guestTeam || ''}`;
-    const existingKeys = new Set(state.games.map(gameKey));
-    const merged = state.games.concat(newGames.filter(g => !existingKeys.has(gameKey(g))));
+    const newGames = dedupeGames(results.flat());
+    const existingKeys = new Set(state.games.map(getGameDedupKey));
+    const merged = dedupeGames(state.games.concat(newGames.filter(g => !existingKeys.has(getGameDedupKey(g)))));
     merged.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
     state.games = merged;
     state.loadedFrom = newFrom;
