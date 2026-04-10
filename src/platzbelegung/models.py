@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, time
+from typing import Optional
 
 
 @dataclass
@@ -69,7 +70,7 @@ class Venue:
 
 @dataclass
 class OccupancySlot:
-    """Ein Belegungsslot: ein Heimspiel auf einer Sportstätte."""
+    """Ein Belegungsslot: ein Heimspiel oder Training auf einer Sportstätte."""
 
     venue: Venue
     date: date
@@ -80,3 +81,67 @@ class OccupancySlot:
     opponent: str
     league: str
     is_home_game: bool = True
+    is_training: bool = False
+    source_url: str = ""
+
+
+@dataclass
+class TrainingSession:
+    """Eine wiederkehrende Trainingseinheit, gescraped von einer Vereins-Webseite.
+
+    Eine ``TrainingSession`` ist nicht an ein konkretes Datum gebunden, sondern
+    gibt den Wochentag und die Uhrzeit des Trainings an.  Sie wird mit
+    :func:`platzbelegung.parser.training_sessions_to_occupancy` in konkrete
+    :class:`OccupancySlot`-Objekte für einen Zeitraum umgewandelt.
+    """
+
+    club_name: str
+    team_name: str
+    weekday: int            # 0=Montag, 6=Sonntag
+    start_time: time
+    end_time: Optional[time]
+    venue_name: str
+    source_url: str
+    scraped_at: str = ""
+    duration_minutes: int = 90
+
+    def to_dict(self) -> dict:
+        """Serialisiert die Trainingseinheit in ein dict (JSON-kompatibel)."""
+        return {
+            "clubName": self.club_name,
+            "teamName": self.team_name,
+            "weekday": self.weekday,
+            "startTime": self.start_time.strftime("%H:%M"),
+            "endTime": self.end_time.strftime("%H:%M") if self.end_time else None,
+            "venueName": self.venue_name,
+            "sourceUrl": self.source_url,
+            "scrapedAt": self.scraped_at,
+            "durationMinutes": self.duration_minutes,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict, scraped_at: str = "") -> "TrainingSession":
+        """Erstellt ein TrainingSession-Objekt aus einem dict."""
+        start_raw = data.get("startTime", "")
+        end_raw = data.get("endTime")
+        try:
+            start = time.fromisoformat(start_raw) if start_raw else time(0, 0)
+        except ValueError:
+            start = time(0, 0)
+        end: Optional[time] = None
+        if end_raw:
+            try:
+                end = time.fromisoformat(end_raw)
+            except ValueError:
+                end = None
+        return cls(
+            club_name=data.get("clubName", ""),
+            team_name=data.get("teamName", ""),
+            weekday=int(data.get("weekday", 0)),
+            start_time=start,
+            end_time=end,
+            venue_name=data.get("venueName", ""),
+            source_url=data.get("sourceUrl", ""),
+            scraped_at=data.get("scrapedAt", scraped_at),
+            duration_minutes=int(data.get("durationMinutes", 90)),
+        )

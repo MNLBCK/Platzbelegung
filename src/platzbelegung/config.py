@@ -25,6 +25,14 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 @dataclass
+class ClubConfig:
+    """Konfiguration eines Vereins mit Trainingszeiten-URL."""
+    name: str = ""
+    training_url: str = ""
+    venue_name: str = ""
+
+
+@dataclass
 class VenueConfig:
     """Eine konfigurierte Sportstätte."""
     id: str = ""
@@ -78,6 +86,7 @@ class AppConfig:
     club_name: str = ""
     season: str = "2526"
     venues: list[VenueConfig] = field(default_factory=list)
+    clubs: list[ClubConfig] = field(default_factory=list)
     date_range: DateRangeConfig = field(default_factory=DateRangeConfig)
     scraper: ScraperConfig = field(default_factory=ScraperConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
@@ -174,11 +183,22 @@ def load_config(path: Path | None = None) -> AppConfig:
         )
     ]
 
+    clubs = [
+        ClubConfig(
+            name=c.get("name", ""),
+            training_url=c.get("training_url", ""),
+            venue_name=c.get("venue_name", ""),
+        )
+        for c in raw.get("clubs", [])
+        if isinstance(c, dict) and (c.get("name") or c.get("training_url"))
+    ]
+
     return AppConfig(
         club_id=club.get("id", "00ES8GNAVO00000PVV0AG08LVUPGND5I"),
         club_name=club.get("name", ""),
         season=str(raw.get("season", "2526")),
         venues=venues,
+        clubs=clubs,
         date_range=_parse_date_range(raw.get("date_range", {})),
         scraper=scraper,
         output=output,

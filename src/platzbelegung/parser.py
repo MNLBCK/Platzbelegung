@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import date, datetime as _dt, timedelta
 from typing import DefaultDict
 
-from platzbelegung.models import OccupancySlot, ScrapedGame, Venue
+from platzbelegung.models import OccupancySlot, ScrapedGame, TrainingSession, Venue
 
 # Puffer in Minuten, der vor dem Anstoß für Vorbereitung eingeplant wird
 PREPARATION_BUFFER_MINUTES: int = 15
@@ -127,6 +127,62 @@ def scraped_games_to_occupancy(
                 is_home_game=True,
             )
         )
+
+    slots.sort(key=lambda s: (s.date, s.start_time))
+    return slots
+
+
+def training_sessions_to_occupancy(
+    sessions: list[TrainingSession],
+    date_start: date,
+    date_end: date,
+) -> list[OccupancySlot]:
+    """Wandelt wiederkehrende Trainingseinheiten in Belegungsslots um.
+
+    Jede :class:`~platzbelegung.models.TrainingSession` wird für jeden
+    passenden Wochentag im angegebenen Zeitraum in einen
+    :class:`~platzbelegung.models.OccupancySlot` expandiert.
+
+    Args:
+        sessions: Liste der Trainingseinheiten (wochenbasiert).
+        date_start: Erster Tag des Zeitraums (inklusive).
+        date_end: Letzter Tag des Zeitraums (inklusive).
+
+    Returns:
+        Liste von OccupancySlot-Objekten, sortiert nach Datum und Uhrzeit.
+    """
+    slots: list[OccupancySlot] = []
+
+    current = date_start
+    while current <= date_end:
+        for session in sessions:
+            if current.weekday() == session.weekday:
+                if session.end_time is not None:
+                    end = session.end_time
+                else:
+                    # Dauer addieren, wenn keine Endzeit bekannt
+                    end_dt = _dt.combine(current, session.start_time) + timedelta(
+                        minutes=session.duration_minutes
+                    )
+                    end = end_dt.time()
+
+                venue = Venue(name=session.venue_name, address=session.venue_name)
+                slots.append(
+                    OccupancySlot(
+                        venue=venue,
+                        date=current,
+                        start_time=session.start_time,
+                        end_time=end,
+                        team_name=session.team_name,
+                        team_kind="Training",
+                        opponent="",
+                        league=session.club_name,
+                        is_home_game=False,
+                        is_training=True,
+                        source_url=session.source_url,
+                    )
+                )
+        current += timedelta(days=1)
 
     slots.sort(key=lambda s: (s.date, s.start_time))
     return slots

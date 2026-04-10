@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import json
+from datetime import time
 from pathlib import Path
 
 import pytest
 
-from platzbelegung.models import ScrapedGame
+from platzbelegung.models import ScrapedGame, TrainingSession
 from platzbelegung.storage import (
     games_from_snapshot,
     list_snapshots,
     load_latest_snapshot,
     load_snapshot,
     save_snapshot,
+    training_sessions_from_snapshot,
 )
 
 
@@ -152,3 +154,54 @@ class TestGamesFromSnapshot:
     def test_empty_snapshot_returns_empty_list(self):
         games = games_from_snapshot({"games": []})
         assert games == []
+
+
+def _make_training_sessions() -> list[TrainingSession]:
+    return [
+        TrainingSession(
+            club_name="SKV Hochberg",
+            team_name="Herren",
+            weekday=1,
+            start_time=time(19, 0),
+            end_time=time(20, 30),
+            venue_name="Sportplatz SKV",
+            source_url="https://www.skv-hochberg.de/training",
+            scraped_at="2026-04-10T00:00:00Z",
+            duration_minutes=90,
+        )
+    ]
+
+
+class TestTrainingSessionsInSnapshot:
+    def test_training_sessions_saved_and_loaded(self, tmp_path):
+        sessions = _make_training_sessions()
+        snap_path = save_snapshot(
+            _make_games(),
+            config_meta={},
+            snapshots_dir=str(tmp_path / "snapshots"),
+            training_sessions=sessions,
+        )
+        snapshot = load_snapshot(snap_path)
+        loaded = training_sessions_from_snapshot(snapshot)
+        assert len(loaded) == 1
+        assert loaded[0].club_name == "SKV Hochberg"
+        assert loaded[0].team_name == "Herren"
+        assert loaded[0].weekday == 1
+        assert loaded[0].start_time == time(19, 0)
+        assert loaded[0].source_url == "https://www.skv-hochberg.de/training"
+
+    def test_snapshot_without_training_returns_empty(self):
+        snapshot = {"games": [], "generated_at": "2026-04-10T00:00:00Z"}
+        loaded = training_sessions_from_snapshot(snapshot)
+        assert loaded == []
+
+    def test_save_without_training_sessions_key_exists(self, tmp_path):
+        snap_path = save_snapshot(
+            _make_games(),
+            config_meta={},
+            snapshots_dir=str(tmp_path / "snapshots"),
+        )
+        with open(snap_path, encoding="utf-8") as f:
+            data = json.load(f)
+        assert "training_sessions" in data
+        assert data["training_sessions"] == []
