@@ -49,7 +49,7 @@ _TRAINING_SECTION_RE = re.compile(
 
 # Begriffe, die auf Mannschaftsnamen hinweisen
 _TEAM_KEYWORDS_RE = re.compile(
-    r"herren|damen|junioren|jugend|junioren|senior|aktive|reserve|"
+    r"herren|damen|junioren|jugend|senior|aktive|reserve|"
     r"mädchen|männer|frauen|u\s*\d{1,2}|a-|b-|c-|d-|e-|f-|g-|bambini",
     re.IGNORECASE,
 )
@@ -158,8 +158,8 @@ class ClubWebsiteScraper:
             response.raise_for_status()
         except requests.exceptions.RequestException as exc:
             logger.warning(
-                "Netzwerkfehler beim Laden von %s: %s",
-                club_cfg.training_url, exc,
+                "Netzwerkfehler beim Laden von %s (%s): %s",
+                club_cfg.training_url, type(exc).__name__, exc,
             )
             return []
 
