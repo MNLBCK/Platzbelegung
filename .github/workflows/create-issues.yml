@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - copilot/retrieve-urls-for-issues
+  workflow_dispatch:
 
 permissions:
   issues: write
@@ -12,6 +13,14 @@ jobs:
   create-issues:
     runs-on: ubuntu-latest
     steps:
+      - name: Create required labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for LABEL in refactoring security enhancement testing maintenance; do
+            gh label create "$LABEL" --repo ${{ github.repository }} --color "0075ca" --description "$LABEL" 2>/dev/null || true
+          done
+
       - name: Create Issue 1 – Parsing-Logik vereinheitlichen
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
