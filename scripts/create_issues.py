@@ -19,6 +19,7 @@ import urllib.request
 
 REPO = os.environ.get("GITHUB_REPO", "MNLBCK/Platzbelegung")
 API_BASE = "https://api.github.com"
+GITHUB_API_VERSION = "2022-11-28"
 
 ISSUES = [
     {
@@ -329,7 +330,8 @@ Aktuell ist im Python-Paket MIT hinterlegt, in `package.json` jedoch ISC. Außer
 ]
 
 
-def get_token() -> str:
+def require_github_token() -> str:
+    """Read and return the GitHub token from the environment, exiting if absent."""
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if not token:
         print(
@@ -340,12 +342,26 @@ def get_token() -> str:
     return token
 
 
-def github_request(method: str, path: str, token: str, data: dict | None = None):
+def github_request(method: str, path: str, token: str, data: dict | None = None) -> dict:
+    """Send a GitHub REST API request and return the parsed JSON response.
+
+    Args:
+        method: HTTP method (GET, POST, …).
+        path:   API path starting with '/', e.g. '/repos/owner/repo/issues'.
+        token:  GitHub personal access token.
+        data:   Optional request body, serialised to JSON.
+
+    Returns:
+        Parsed JSON response as a dict (or list cast to dict by caller).
+
+    Raises:
+        urllib.error.HTTPError: On any non-2xx response.
+    """
     url = f"{API_BASE}{path}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
         "User-Agent": "platzbelegung-issue-creator/1.0",
     }
     body = json.dumps(data).encode() if data is not None else None
@@ -408,12 +424,14 @@ def ensure_label(label: str, token: str) -> None:
                 {"name": label, "color": color, "description": description},
             )
             print(f"  [label created] {label}")
-        except urllib.error.HTTPError:
-            print(f"  [label skipped] {label} (could not create)")
+        except urllib.error.HTTPError as create_exc:
+            print(
+                f"  [label skipped] {label} (HTTP {create_exc.code} – could not create)",
+            )
 
 
 def main() -> None:
-    token = get_token()
+    token = require_github_token()
     print(f"Repository : {REPO}")
     print(f"Issues     : {len(ISSUES)}")
     print()
