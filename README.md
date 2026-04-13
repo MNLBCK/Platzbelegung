@@ -347,3 +347,19 @@ npm test
 - Die App scrapt fussball.de; Änderungen im Layout können das Scraping beeinflussen.
 - Beachte die Nutzungsbedingungen von fussball.de.
 - `data/` ist gitignoriert – Snapshots werden lokal gespeichert.
+
+## Issues erstellen
+
+Die Datei [`.github/ISSUES_TO_CREATE.md`](.github/ISSUES_TO_CREATE.md) enthält die kanonischen Texte für 12 geplante Verbesserungs-Issues (auf Deutsch mit Titel, Beschreibung, Akzeptanzkriterien und betroffenen Dateien).
+
+Mit dem beigelegten Skript können die Issues automatisch über die GitHub REST API angelegt werden:
+
+```bash
+# GitHub Personal Access Token mit repo-Scope setzen
+export GITHUB_TOKEN=ghp_...
+
+# Issues erstellen (bereits vorhandene werden übersprungen)
+python scripts/create_issues.py
+```
+
+Das Skript prüft anhand des exakten Titels, ob ein Issue bereits existiert, und überspringt es in diesem Fall. Am Ende gibt es eine Zusammenfassung aus, wie viele Issues erstellt, übersprungen oder fehlgeschlagen sind. Bei nicht behebbaren Fehlern endet das Skript mit Exit-Code 1.
