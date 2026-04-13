@@ -42,9 +42,6 @@
 
     <rect x="110" y="236" width="54" height="108" rx="12" fill="none" stroke="#f4fff2" stroke-width="7" />
     <rect x="348" y="236" width="54" height="108" rx="12" fill="none" stroke="#f4fff2" stroke-width="7" />
-    <path d="M110 262h28" stroke="#f4fff2" stroke-width="7" stroke-linecap="round" />
-    <path d="M402 262h28" stroke="#f4fff2" stroke-width="7" stroke-linecap="round" />
-
   </g>
 
   <g transform="translate(270 60)">
