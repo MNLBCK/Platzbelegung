@@ -16,14 +16,23 @@
 
   <rect x="32" y="36" width="448" height="440" rx="88" fill="url(#card)" stroke="#0d5c32" stroke-width="6" />
   <rect x="56" y="56" width="400" height="88" rx="32" fill="url(#header)" />
-  <circle cx="142" cy="100" r="12" fill="#fff3e0" />
-  <circle cx="256" cy="100" r="12" fill="#fff3e0" />
-  <circle cx="370" cy="100" r="12" fill="#fff3e0" />
+  <circle cx="132" cy="96" r="10" fill="#fff3e0" />
+  <circle cx="256" cy="96" r="10" fill="#fff3e0" />
+  <circle cx="380" cy="96" r="10" fill="#fff3e0" />
+  <rect x="112" y="72" width="288" height="64" rx="18" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" stroke-width="3" />
+  <path d="M112 102h288" stroke="#fff7ec" stroke-width="3" opacity="0.85" />
+  <g stroke="#fff7ec" stroke-width="2.6" opacity="0.82">
+    <line x1="168" y1="72" x2="168" y2="136" />
+    <line x1="224" y1="72" x2="224" y2="136" />
+    <line x1="280" y1="72" x2="280" y2="136" />
+    <line x1="336" y1="72" x2="336" y2="136" />
+  </g>
+  <rect x="132" y="110" width="32" height="18" rx="4" fill="#fff7ec" opacity="0.85" />
+  <rect x="206" y="110" width="26" height="18" rx="4" fill="#fff7ec" opacity="0.75" />
+  <rect x="262" y="110" width="26" height="18" rx="4" fill="#fff7ec" opacity="0.65" />
+  <rect x="318" y="110" width="28" height="18" rx="4" fill="#fff7ec" opacity="0.78" />
 
   <rect x="82" y="152" width="348" height="276" rx="36" fill="url(#field)" stroke="#0f6c36" stroke-width="6" />
-  <rect x="82" y="192" width="348" height="24" rx="12" fill="#ffffff" opacity="0.18" />
-  <rect x="82" y="248" width="348" height="22" rx="11" fill="#ffffff" opacity="0.12" />
-  <rect x="82" y="302" width="348" height="22" rx="11" fill="#ffffff" opacity="0.10" />
 
   <rect x="110" y="182" width="292" height="216" rx="26" fill="none" stroke="#f4fff2" stroke-width="8" />
   <line x1="256" y1="182" x2="256" y2="398" stroke="#f4fff2" stroke-width="7" />
@@ -35,10 +44,4 @@
   <path d="M110 262h28" stroke="#f4fff2" stroke-width="7" stroke-linecap="round" />
   <path d="M402 262h28" stroke="#f4fff2" stroke-width="7" stroke-linecap="round" />
 
-  <rect x="118" y="72" width="80" height="22" rx="8" fill="#fff8ed" opacity="0.92" />
-  <rect x="218" y="72" width="80" height="22" rx="8" fill="#fff8ed" opacity="0.92" />
-  <rect x="318" y="72" width="80" height="22" rx="8" fill="#fff8ed" opacity="0.92" />
-
-  <rect x="164" y="364" width="76" height="32" rx="10" fill="#ffce6a" stroke="#ffad33" stroke-width="4" />
-  <path d="M180 380l12 12 22-26" fill="none" stroke="#7c4a00" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
 </svg>
