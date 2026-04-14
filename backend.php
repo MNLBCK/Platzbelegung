@@ -577,14 +577,44 @@ parse_str(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_QUERY) ?: '', $query
 // Public POST endpoint for submitting requests must be handled regardless of GET/HEAD block.
 if ($method === 'POST' && $uri === '/api/requests/submit') {
     // Öffentlicher Endpoint: nur Anfragen speichern. Keine automatische Verarbeitung.
+
+    // Feldlängen begrenzen, um Disk-Fill-Angriffe zu verhindern
+    $maxUrlLen  = 2048;
+    $maxTextLen = 4096;
+    $maxNameLen = 200;
+
     $body = getJsonBody();
-    $source = trim((string)($body['source_url'] ?? ''));
-    $text = trim((string)($body['text'] ?? ''));
-    $club = trim((string)($body['club_name'] ?? ''));
-    $team = trim((string)($body['team'] ?? ''));
+    $source    = substr(trim((string)($body['source_url'] ?? '')), 0, $maxUrlLen);
+    $text      = substr(trim((string)($body['text'] ?? '')), 0, $maxTextLen);
+    $club      = substr(trim((string)($body['club_name'] ?? '')), 0, $maxNameLen);
+    $team      = substr(trim((string)($body['team'] ?? '')), 0, $maxNameLen);
+    $ageClass  = substr(trim((string)($body['age_class'] ?? '')), 0, $maxNameLen);
+    $competition = substr(trim((string)($body['competition'] ?? '')), 0, $maxNameLen);
     $submitter = trim((string)($body['submitter'] ?? '')) ?: ($_SERVER['REMOTE_ADDR'] ?? 'web');
 
     if ($source === '' && $text === '') { jsonResponse(['error' => 'source_url or text required'], 400); return; }
+
+    // Einfaches IP-basiertes Rate-Limiting: max. 5 Anfragen pro IP pro 10 Minuten
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $rateDir  = DATA_DIR . '/requests/ratelimit';
+    if (!is_dir($rateDir) && !mkdir($rateDir, 0775, true) && !is_dir($rateDir)) {
+        jsonResponse(['error' => 'Could not create ratelimit directory'], 500); return;
+    }
+    $rateFile = $rateDir . '/' . md5($clientIp) . '.json';
+    $rateWindow = 600; // 10 Minuten in Sekunden
+    $rateLimit  = 5;
+    $now = time();
+    $rateData = [];
+    if (file_exists($rateFile)) {
+        $rateData = json_decode((string)file_get_contents($rateFile), true) ?: [];
+    }
+    // Einträge außerhalb des Fensters entfernen
+    $rateData = array_values(array_filter($rateData, fn($ts) => ($now - $ts) < $rateWindow));
+    if (count($rateData) >= $rateLimit) {
+        jsonResponse(['error' => 'Zu viele Anfragen. Bitte später erneut versuchen.'], 429); return;
+    }
+    $rateData[] = $now;
+    file_put_contents($rateFile, json_encode($rateData), LOCK_EX);
 
     if ($source !== '') {
         if (!preg_match('/^https?:\/\//i', $source)) {
@@ -607,10 +637,12 @@ if ($method === 'POST' && $uri === '/api/requests/submit') {
         'submitted_at' => gmdate(DATE_ATOM),
         'submitter' => $submitter,
         'body' => [
-            'source_url' => $source,
-            'text' => $text,
-            'club_name' => $club,
-            'team' => $team,
+            'source_url'  => $source,
+            'text'        => $text,
+            'club_name'   => $club,
+            'team'        => $team,
+            'age_class'   => $ageClass,
+            'competition' => $competition,
         ],
     ];
 

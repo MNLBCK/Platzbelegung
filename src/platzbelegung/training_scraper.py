@@ -47,10 +47,18 @@ _TRAINING_SECTION_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Begriffe, die auf Mannschaftsnamen hinweisen
+# Begriffe, die auf Mannschaftsnamen hinweisen (für Erkennungszwecke)
 _TEAM_KEYWORDS_RE = re.compile(
     r"herren|damen|junioren|jugend|senior|aktive|reserve|"
-    r"mädchen|männer|frauen|u\s*\d{1,2}|a-|b-|c-|d-|e-|f-|g-|bambini",
+    r"mädchen|männer|frauen|u\s*\d{1,2}|[a-g]-|bambini",
+    re.IGNORECASE,
+)
+
+# Vollständige Mannschaftsbezeichnungen (für Extraktion des Namens)
+_TEAM_FULL_RE = re.compile(
+    r"\b(?:[A-G]-\s*(?:Juniorinnen|Junioren)|U\s*\d{1,2}|"
+    r"(?:Herren|Damen|Frauen|Männer)(?:\s+(?:[IVXivx]+|\d+))?|"
+    r"Junioren|Jugend|Senior(?:en)?|Aktive|Reserve|Bambini|Mädchen)\b",
     re.IGNORECASE,
 )
 
@@ -352,7 +360,7 @@ class ClubWebsiteScraper:
                 continue
 
             # Mannschaft ggf. aus Text extrahieren
-            team_match = _TEAM_KEYWORDS_RE.search(text)
+            team_match = _TEAM_FULL_RE.search(text)
             team_name = team_match.group(0).strip() if team_match else current_team
 
             sessions.append(

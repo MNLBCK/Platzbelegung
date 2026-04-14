@@ -195,17 +195,17 @@ function openTrainingModal(preselectedTeam) {
   teamSelect.innerHTML = '<option value="">(keine Auswahl)</option>' + entries.map(e => '<option value="' + escapeHtml(e.team) + '" data-age="' + escapeHtml(e.ageClass || '') + '" data-comp="' + escapeHtml(e.competitionHint || '') + '">' + escapeHtml(e.team) + '</option>').join('');
   if (preselectedTeam) teamSelect.value = preselectedTeam;
   // set age/competition if preselected
-  const sel = teamSelect.querySelector('option[value="' + (preselectedTeam ? escapeHtml(preselectedTeam) : '') + '"]');
+  const sel = teamSelect.selectedOptions[0];
   if (sel && ageInput) ageInput.value = sel.dataset.age || '';
   if (sel && compInput) compInput.value = sel.dataset.comp || '';
   urlInput.value = '';
   if (textInput) textInput.value = '';
-  teamSelect.addEventListener('change', () => {
+  teamSelect.onchange = () => {
     const o = teamSelect.selectedOptions[0];
     if (!o) return;
     if (ageInput) ageInput.value = o.dataset.age || '';
     if (compInput) compInput.value = o.dataset.comp || '';
-  });
+  };
   msg.style.display = 'none';
   showEl(modal, true);
   modal.setAttribute('aria-hidden', 'false');

@@ -9,7 +9,7 @@ venues: []
 clubs:
   - name: SKV Hochberg
     training_url: https://www.skv-hochberg.de/fußball/
-      venue_name: Sportplatz SKV Hochberg
+    venue_name: Sportplatz SKV Hochberg
   - name: SGV Hochdorf
     training_url: https://www.sgv-hochdorf.de/training
     venue_name: Sportplatz SGV Hochdorf
