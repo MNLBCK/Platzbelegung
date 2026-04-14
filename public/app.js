@@ -135,6 +135,137 @@ function setTeamOverviewLoading() {
   showEl(wrap, true);
 }
 
+// ===================== Submit Training Link (public) =====================
+
+async function submitTrainingLink() {
+  const urlEl = $('submit-training-url');
+  const teamEl = $('submit-training-team');
+  const msgEl = $('submit-training-msg');
+  if (!urlEl || !msgEl) return;
+  const source = String(urlEl.value || '').trim();
+  const team = String(teamEl?.value || '').trim();
+  if (!source) { msgEl.textContent = 'Bitte eine URL eingeben.'; return; }
+
+  try {
+    const resp = await fetch('/api/requests/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_url: source, team: team }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      msgEl.textContent = data.error || 'Fehler beim Einreichen.';
+    } else {
+      msgEl.textContent = 'Danke — Anfrage wurde eingereicht (id: ' + (data.id || '') + ').';
+      urlEl.value = '';
+      if (teamEl) teamEl.value = '';
+    }
+  } catch (e) {
+    msgEl.textContent = 'Netzwerkfehler beim Einreichen.';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const submitBtn = $('submit-training-btn');
+  if (submitBtn) submitBtn.addEventListener('click', submitTrainingLink);
+  // wire club +Training button
+  const addClubBtn = $('add-training-club-btn');
+  if (addClubBtn) addClubBtn.addEventListener('click', () => openTrainingModal());
+  // modal handlers
+  const modal = $('training-modal');
+  const modalClose = $('training-modal-close');
+  const modalCancel = $('training-modal-cancel');
+  const modalSubmit = $('training-modal-submit');
+  if (modalClose) modalClose.addEventListener('click', closeTrainingModal);
+  if (modalCancel) modalCancel.addEventListener('click', closeTrainingModal);
+  if (modalSubmit) modalSubmit.addEventListener('click', submitTrainingModal);
+});
+
+function openTrainingModal(preselectedTeam) {
+  const modal = $('training-modal');
+  const teamSelect = $('training-modal-team');
+  const urlInput = $('training-modal-url');
+  const textInput = $('training-modal-text');
+  const ageInput = $('training-modal-age');
+  const compInput = $('training-modal-competition');
+  const msg = $('training-modal-msg');
+  if (!modal || !teamSelect || !urlInput) return;
+  // populate teams from current games
+  const entries = getTeamEntries();
+  teamSelect.innerHTML = '<option value="">(keine Auswahl)</option>' + entries.map(e => '<option value="' + escapeHtml(e.team) + '" data-age="' + escapeHtml(e.ageClass || '') + '" data-comp="' + escapeHtml(e.competitionHint || '') + '">' + escapeHtml(e.team) + '</option>').join('');
+  if (preselectedTeam) teamSelect.value = preselectedTeam;
+  // set age/competition if preselected
+  const sel = teamSelect.querySelector('option[value="' + (preselectedTeam ? escapeHtml(preselectedTeam) : '') + '"]');
+  if (sel && ageInput) ageInput.value = sel.dataset.age || '';
+  if (sel && compInput) compInput.value = sel.dataset.comp || '';
+  urlInput.value = '';
+  if (textInput) textInput.value = '';
+  teamSelect.addEventListener('change', () => {
+    const o = teamSelect.selectedOptions[0];
+    if (!o) return;
+    if (ageInput) ageInput.value = o.dataset.age || '';
+    if (compInput) compInput.value = o.dataset.comp || '';
+  });
+  msg.style.display = 'none';
+  showEl(modal, true);
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeTrainingModal() {
+  const modal = $('training-modal');
+  if (!modal) return;
+  showEl(modal, false);
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+async function submitTrainingModal() {
+  const teamSelect = $('training-modal-team');
+  const urlInput = $('training-modal-url');
+  const textInput = $('training-modal-text');
+  const ageInput = $('training-modal-age');
+  const compInput = $('training-modal-competition');
+  const msg = $('training-modal-msg');
+  if (!urlInput || !msg) return;
+  const source = String(urlInput.value || '').trim();
+  const text = textInput ? String(textInput.value || '').trim() : '';
+  const team = teamSelect ? String(teamSelect.value || '') : '';
+  const ageClass = ageInput ? String(ageInput.value || '').trim() : '';
+  const competition = compInput ? String(compInput.value || '').trim() : '';
+  if (!source && !text) {
+    msg.textContent = 'Bitte einen Link oder Freitext eingeben.';
+    msg.style.display = 'block';
+    return;
+  }
+  try {
+    const resp = await fetch('/api/requests/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_url: source,
+        text: text,
+        team: team,
+        age_class: ageClass,
+        competition: competition,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      msg.textContent = data.error || 'Fehler beim Einreichen.';
+      msg.style.display = 'block';
+    } else {
+      msg.textContent = 'Danke — Anfrage eingereicht (id: ' + (data.id || '') + ').';
+      msg.style.display = 'block';
+      urlInput.value = '';
+      if (textInput) textInput.value = '';
+      // clear and close after short delay
+      setTimeout(() => { closeTrainingModal(); }, 1200);
+    }
+  } catch (e) {
+    msg.textContent = 'Netzwerkfehler beim Einreichen.';
+    msg.style.display = 'block';
+  }
+}
+
 async function loadAppMeta() {
   const badgeEl = $('app-version-badge');
   if (!badgeEl) return;
@@ -156,6 +287,16 @@ async function loadAppMeta() {
     if (deployedAt) titleParts.push('Deploy: ' + deployedAt);
     if (snapshotGeneratedAt) titleParts.push('Snapshot: ' + snapshotGeneratedAt);
     if (titleParts.length) badgeEl.title = titleParts.join(' • ');
+    // show branch badge if provided and not main
+    if (data.branch && String(data.branch).trim() && String(data.branch).trim() !== 'main') {
+      let branchEl = document.querySelector('.branch-badge');
+      if (!branchEl) {
+        branchEl = document.createElement('span');
+        branchEl.className = 'branch-badge';
+        badgeEl.parentNode.appendChild(branchEl);
+      }
+      branchEl.textContent = String(data.branch).trim();
+    }
   } catch (_) {
     badgeEl.textContent = 'dev';
   }
@@ -448,7 +589,8 @@ function getGameResult(game) {
 }
 
 function getTeamSortRank(entry) {
-  const text = ((entry.competition || '') + ' ' + (entry.team || '')).toLowerCase();
+  // consider competition, ageClass and team name for robust ranking
+  const text = ((entry.competition || entry.competitionHint || '') + ' ' + (entry.ageClass || '') + ' ' + (entry.team || '')).toLowerCase();
   if (/\bherren\b/.test(text)) return 0;
   if (/\bdamen\b/.test(text)) return 1;
   if (/\ba-junior/.test(text) || /\bu19\b/.test(text)) return 2;
@@ -470,8 +612,11 @@ function extractAgeClass(competition) {
 
 function formatCompetitionHint(ageClass, competitions) {
   const unique = Array.from(new Set((competitions || []).filter(Boolean)));
-  if (!unique.length) return ageClass || '–';
-  if (unique.length === 1) return unique[0];
+  if (!unique.length) return '–';
+  if (unique.length === 1) {
+    const parts = unique[0].split('|').map(p => p.trim()).filter(Boolean);
+    return parts[1] || parts[0] || '–';
+  }
   const details = unique
     .map(comp => {
       const parts = comp.split('|').map(p => p.trim()).filter(Boolean);
@@ -479,8 +624,7 @@ function formatCompetitionHint(ageClass, competitions) {
     })
     .filter(Boolean);
   const detailText = Array.from(new Set(details)).join(', ');
-  const prefix = ageClass || extractAgeClass(unique[0]) || 'Mehrere Wettbewerbe';
-  return prefix + ' | mehrere Wettbewerbe' + (detailText ? ' (' + detailText + ')' : '');
+  return 'mehrere Wettbewerbe' + (detailText ? ' (' + detailText + ')' : '');
 }
 
 function getTeamEntries() {
@@ -499,7 +643,8 @@ function getTeamEntries() {
   });
   const entries = Array.from(grouped.values()).map(entry => ({
     team: entry.team,
-    competition: formatCompetitionHint(entry.ageClass, entry.competitions),
+    ageClass: entry.ageClass,
+    competitionHint: formatCompetitionHint(entry.ageClass, entry.competitions),
   }));
   entries.sort((a, b) => {
     const rankDiff = getTeamSortRank(a) - getTeamSortRank(b);
@@ -548,14 +693,22 @@ function renderTeamOverview() {
   listEl.innerHTML =
     '<div class="team-overview-table team-overview-table--head">' +
       '<span>Team</span>' +
+      '<span>Altersklasse</span>' +
       '<span>Spielklasse</span>' +
+      '<span></span>' +
     '</div>' +
     teams.map(entry =>
       '<div class="team-overview-table">' +
         '<span class="team-overview-name">' + escapeHtml(entry.team) + '</span>' +
-        '<span class="team-overview-comp">' + escapeHtml(entry.competition || '–') + '</span>' +
+        '<span class="team-overview-age">' + escapeHtml(entry.ageClass || '–') + '</span>' +
+        '<span class="team-overview-comp">' + escapeHtml(entry.competitionHint || '–') + '</span>' +
+        '<span class="team-overview-actions"><button class="btn btn-sm team-add-training-btn" data-team="' + escapeHtml(entry.team) + '">+ Training</button></span>' +
       '</div>'
     ).join('');
+  // wire +Training buttons per team row
+  listEl.querySelectorAll('.team-add-training-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openTrainingModal(btn.dataset.team); });
+  });
   wrap.ontoggle = () => {
     summaryEl.textContent = (wrap.open ? '▾ ' : '▸ ') + teams.length + ' Mannschaften';
   };
@@ -701,36 +854,42 @@ function renderSelectedClub() {
   if (!club) {
     el.innerHTML =
       '<div class="selected-club-label">Ausgewählter Verein</div>' +
-      '<div class="selected-club-card selected-club-card--empty">Bitte Verein auswählen</div>';
+      '<div class="selected-club-cards"><div class="selected-club-card selected-club-card--empty">Bitte Verein auswählen</div></div>';
     showEl(el, true);
     return;
   }
   const allClubs = getAllClubs();
   const label = allClubs.length > 1 ? 'Ausgewählte Vereine' : 'Ausgewählter Verein';
-  const cardsHtml = allClubs.map((c, i) => {
-    const isPrimary = i === 0;
+  const cardsHtml = allClubs.map(c => {
     const logoHtml = c.logoUrl
       ? '<img class="selected-club-logo" src="' + escapeHtml(c.logoUrl) + '" alt="' + escapeHtml(c.name) + '" loading="lazy">'
       : '<span class="selected-club-logo-fallback">' + escapeHtml((c.name || '?').charAt(0).toUpperCase()) + '</span>';
     const clubUrl = getClubUrl(c);
-    const removeBtn = !isPrimary
-      ? '<button class="sg-remove-club-btn" data-club-id="' + escapeHtml(c.id) + '" title="Verein entfernen" aria-label="Verein entfernen">\u00d7</button>'
-      : '';
+    const removeBtn = '<button class="sg-remove-club-btn" data-club-id="' + escapeHtml(c.id) + '" title="Verein entfernen" aria-label="Verein entfernen">\u00d7</button>';
     return (
-      '<div class="selected-club-card' + (!isPrimary ? ' selected-club-card--additional' : '') + '">' +
-        '<div class="selected-club-logo-wrap">' + logoHtml + '</div>' +
-        '<div class="selected-club-details">' +
-          '<div class="selected-club-name">' + escapeHtml(c.name) + '</div>' +
-          (c.location ? '<div class="selected-club-location">' + escapeHtml(c.location) + '</div>' : '') +
-          (clubUrl ? '<div class="selected-club-link"><a href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">Verein auf fussball.de &#8599;</a></div>' : '') +
+      '<div class="selected-club-card">' +
+        '<div class="selected-club-card-main">' +
+          '<div class="selected-club-logo-wrap">' + logoHtml + '</div>' +
+          '<div class="selected-club-details">' +
+            '<div class="selected-club-name">' + escapeHtml(c.name) + '</div>' +
+            (c.location ? '<div class="selected-club-location">' + escapeHtml(c.location) + '</div>' : '') +
+            (clubUrl ? '<div class="selected-club-link"><a href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">Verein auf fussball.de &#8599;</a></div>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="selected-club-actions">' +
+          '<button class="btn btn-sm add-training-club-card-btn" data-club-id="' + escapeHtml(c.id) + '">+ Training</button>' +
         '</div>' +
         removeBtn +
       '</div>'
     );
   }).join('');
-  el.innerHTML = '<div class="selected-club-label">' + label + '</div>' + cardsHtml;
+  el.innerHTML = '<p class="selected-club-label">' + label + '</p><div class="selected-club-cards">' + cardsHtml + '</div>';
   el.querySelectorAll('.sg-remove-club-btn').forEach(btn => {
-    btn.addEventListener('click', () => removeAdditionalClub(btn.dataset.clubId));
+    btn.addEventListener('click', () => removeSelectedClub(btn.dataset.clubId));
+  });
+  // wire +Training buttons inside each club card
+  el.querySelectorAll('.add-training-club-card-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openTrainingModal(); });
   });
   showEl(el, true);
 }
@@ -753,6 +912,8 @@ function clearClub() {
   updateSectionVisibility();
   hideSGSuggestion();
   $('club-search-input').value = '';
+  // ensure team overview and calendar views are cleared as well
+  renderTeamOverview();
   showEl($('week-view'), false);
   showEl($('month-view'), false);
   showEl($('no-games-msg'), true);
@@ -983,6 +1144,113 @@ const SG_TEAM_SUFFIX_RE = /\s+(?:Herren|Damen|Frauen|Senioren|(?:[A-G]-)?Junior(
 // Minimum length for a partner name to be considered a valid club name candidate
 const SG_MIN_PARTNER_LEN = 3;
 
+function normalizeSgText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getRelevantTokens(value) {
+  return normalizeSgText(value)
+    .split(/\s+/)
+    .filter(token => token.length > 2 && !SG_CLUB_PREFIXES.has(token));
+}
+
+function getPostalCode(value) {
+  const match = String(value || '').match(/\b\d{5}\b/);
+  return match ? match[0] : '';
+}
+
+function isQueryCoveredBySelectedClubs(queryName, selectedClubs) {
+  const queryTokens = getRelevantTokens(queryName);
+  if (!queryTokens.length) return false;
+  return (selectedClubs || []).some(club => {
+    const clubTokens = new Set(getRelevantTokens(club?.name || ''));
+    return queryTokens.every(token => clubTokens.has(token));
+  });
+}
+
+function scoreClubSuggestion(queryName, candidate, referenceLocations) {
+  const candidateName = String(candidate?.name || '');
+  const queryNorm = normalizeSgText(queryName);
+  const candidateNorm = normalizeSgText(candidateName);
+  const queryTokens = getRelevantTokens(queryName);
+  const candidateTokens = new Set(getRelevantTokens(candidateName));
+
+  let nameScore = 0;
+  if (queryNorm && candidateNorm) {
+    if (candidateNorm === queryNorm) {
+      nameScore = 6;
+    } else if (candidateNorm.includes(queryNorm) || queryNorm.includes(candidateNorm)) {
+      nameScore = 4;
+    } else {
+      const overlap = queryTokens.filter(token => candidateTokens.has(token)).length;
+      if (overlap === queryTokens.length && overlap > 0) nameScore = 3;
+      else if (overlap > 0) nameScore = 1;
+    }
+  }
+
+  const candidateLocation = String(candidate?.location || '');
+  const candidateLocationNorm = normalizeSgText(candidateLocation);
+  const candidatePostalCode = getPostalCode(candidateLocation);
+  let locationScore = 0;
+
+  (referenceLocations || []).forEach(location => {
+    const refLocation = String(location || '');
+    const refNorm = normalizeSgText(refLocation);
+    const refPostalCode = getPostalCode(refLocation);
+    const refTokens = getRelevantTokens(refLocation);
+    const candidateLocationTokens = new Set(getRelevantTokens(candidateLocation));
+
+    if (candidateLocationNorm && refNorm && candidateLocationNorm === refNorm) {
+      locationScore = Math.max(locationScore, 4);
+      return;
+    }
+    if (candidatePostalCode && refPostalCode && candidatePostalCode === refPostalCode) {
+      locationScore = Math.max(locationScore, 3);
+    }
+    const overlap = refTokens.filter(token => candidateLocationTokens.has(token)).length;
+    if (overlap > 0) {
+      locationScore = Math.max(locationScore, 2);
+    }
+  });
+
+  return { nameScore, locationScore, totalScore: nameScore * 10 + locationScore };
+}
+
+function pickBestSgClubSuggestion(queryName, clubs, existingIds, referenceLocations, selectedClubs) {
+  const queryTokens = getRelevantTokens(queryName);
+  const candidates = (Array.isArray(clubs) ? clubs : [])
+    .filter(club => club && club.id && !existingIds.has(club.id))
+    .map(club => ({ club, ...scoreClubSuggestion(queryName, club, referenceLocations) }))
+    .filter(entry => entry.nameScore > 0)
+    .sort((a, b) => b.totalScore - a.totalScore || b.locationScore - a.locationScore || a.club.name.localeCompare(b.club.name, 'de'));
+
+  if (!candidates.length) return null;
+
+  const best = candidates[0];
+  const sameNameTier = candidates.filter(entry => entry.nameScore === best.nameScore);
+
+  // If multiple clubs match the name equally well but none matches our location,
+  // suppress the suggestion instead of proposing a likely wrong club.
+  if (sameNameTier.length > 1 && best.locationScore === 0) return null;
+
+  // A single bare token like "Hochberg" is too ambiguous without any local signal.
+  if (queryTokens.length <= 1 && best.locationScore === 0) return null;
+
+  // If the detected partner name is already represented by a selected club,
+  // do not suggest another club unless locality confirms it.
+  if (isQueryCoveredBySelectedClubs(queryName, selectedClubs) && best.locationScore === 0) return null;
+
+  // For fuzzy matches, require at least some locality signal.
+  if (best.nameScore < 4 && best.locationScore === 0) return null;
+
+  return best.club;
+}
+
 function detectSpielgemeinschaftPartners(games) {
   if (!state.club || !games.length) return [];
   const clubName = (state.club.name || '').trim();
@@ -1031,7 +1299,9 @@ async function detectAndSuggestSGPartners() {
   const partnerNames = detectSpielgemeinschaftPartners(state.games);
   if (!partnerNames.length) { hideSGSuggestion(); return; }
 
-  const existingIds = new Set(getAllClubs().map(c => c.id));
+  const selectedClubs = getAllClubs();
+  const existingIds = new Set(selectedClubs.map(c => c.id));
+  const referenceLocations = selectedClubs.map(c => c.location).filter(Boolean);
   const suggestions = [];
 
   for (const name of partnerNames) {
@@ -1040,7 +1310,7 @@ async function detectAndSuggestSGPartners() {
       if (!resp.ok) continue;
       const clubs = await resp.json();
       if (!Array.isArray(clubs)) continue;
-      const match = clubs.find(c => !existingIds.has(c.id));
+      const match = pickBestSgClubSuggestion(name, clubs, existingIds, referenceLocations, selectedClubs);
       if (match) {
         suggestions.push(match);
         existingIds.add(match.id); // avoid duplicates across partner names
@@ -1107,8 +1377,21 @@ async function addAdditionalClub(club) {
   await fetchGames(dateFrom, dateTo);
 }
 
-async function removeAdditionalClub(clubId) {
-  state.additionalClubs = state.additionalClubs.filter(c => c.id !== clubId);
+async function removeSelectedClub(clubId) {
+  if (!clubId) return;
+  if (state.club && state.club.id === clubId) {
+    if (state.additionalClubs.length > 0) {
+      const [nextClub, ...remainingClubs] = state.additionalClubs;
+      state.club = nextClub;
+      state.additionalClubs = remainingClubs;
+      saveClubCookie();
+    } else {
+      clearClub();
+      return;
+    }
+  } else {
+    state.additionalClubs = state.additionalClubs.filter(c => c.id !== clubId);
+  }
   saveAdditionalClubsCookie();
   renderSelectedClub();
   const dateFrom = state.loadedFrom || getDefaultDateRange().dateFrom;

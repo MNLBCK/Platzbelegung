@@ -574,6 +574,55 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 parse_str(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_QUERY) ?: '', $query);
 
+// Public POST endpoint for submitting requests must be handled regardless of GET/HEAD block.
+if ($method === 'POST' && $uri === '/api/requests/submit') {
+    // Öffentlicher Endpoint: nur Anfragen speichern. Keine automatische Verarbeitung.
+    $body = getJsonBody();
+    $source = trim((string)($body['source_url'] ?? ''));
+    $text = trim((string)($body['text'] ?? ''));
+    $club = trim((string)($body['club_name'] ?? ''));
+    $team = trim((string)($body['team'] ?? ''));
+    $submitter = trim((string)($body['submitter'] ?? '')) ?: ($_SERVER['REMOTE_ADDR'] ?? 'web');
+
+    if ($source === '' && $text === '') { jsonResponse(['error' => 'source_url or text required'], 400); return; }
+
+    if ($source !== '') {
+        if (!preg_match('/^https?:\/\//i', $source)) {
+            if (str_starts_with($source, '/')) {
+                $source = toAbsoluteUrl($source);
+            } else {
+                jsonResponse(['error' => 'Invalid source_url'], 400); return;
+            }
+        }
+    }
+
+    $id = 'req-' . gmdate('Ymd\THis') . '-' . substr(md5($source . $text . $submitter), 0, 6);
+    $dir = DATA_DIR . '/requests/pending';
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        jsonResponse(['error' => 'Could not create requests directory'], 500); return;
+    }
+
+    $payload = [
+        'id' => $id,
+        'submitted_at' => gmdate(DATE_ATOM),
+        'submitter' => $submitter,
+        'body' => [
+            'source_url' => $source,
+            'text' => $text,
+            'club_name' => $club,
+            'team' => $team,
+        ],
+    ];
+
+    $fn = $dir . '/' . $id . '.json';
+    $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) { jsonResponse(['error' => 'Encoding error'], 500); return; }
+    if (file_put_contents($fn, $json . PHP_EOL, LOCK_EX) === false) { jsonResponse(['error' => 'Could not save request'], 500); return; }
+
+    jsonResponse(['ok' => true, 'id' => $id, 'path' => str_replace(__DIR__ . '/', '', $fn)]);
+    return;
+}
+
 if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/')) {
     if ($uri === '/api/snapshot') {
         $snapshot = loadLatestSnapshot();
@@ -710,6 +759,8 @@ if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/'))
         jsonResponse(['club'=>$config['club'] ?? (object)[], 'season'=>$config['season'] ?? '', 'venues'=>$config['venues'] ?? []]);
         return;
     }
+
+    
 
     jsonResponse(['error' => 'Not found'], 404);
     return;

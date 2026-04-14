@@ -417,3 +417,60 @@ class ClubWebsiteScraper:
             )
 
         return sessions
+
+
+def scrape_from_training_sources(sources_path: str | None = None, cfg: ScraperConfig | None = None) -> list[TrainingSession]:
+    """Lädt eine Liste genehmigter Trainingsquellen aus `data/training_sources.json`
+    und führt den `ClubWebsiteScraper` für jede Quelle aus.
+
+    Args:
+        sources_path: Pfad zur JSON-Datei mit Quellen. Falls None, wird
+            `../data/training_sources.json` relativ zum Paket-Root verwendet.
+        cfg: Optionaler `ScraperConfig` zur Weitergabe an den Scraper.
+
+    Returns:
+        Eine Liste aller gefundenen `TrainingSession`-Objekte aller Quellen.
+    """
+    import os, json
+    from types import SimpleNamespace
+
+    if sources_path is None:
+        pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        sources_path = os.path.join(pkg_root, "data", "training_sources.json")
+
+    try:
+        with open(sources_path, "r", encoding="utf-8") as f:
+            sources = json.load(f)
+    except FileNotFoundError:
+        logger.debug("training_sources.json nicht gefunden: %s", sources_path)
+        return []
+    except Exception as exc:
+        logger.warning("Fehler beim Laden von %s: %s", sources_path, exc)
+        return []
+
+    scraper = ClubWebsiteScraper(cfg)
+    all_sessions: list[TrainingSession] = []
+
+    for entry in sources:
+        url = entry.get("source_url")
+        if not url:
+            continue
+        club_name = entry.get("club_name") or entry.get("club") or url
+        venue_name = entry.get("venue") or entry.get("venue_name") or ""
+        # einfache duck-typed Config/Club-Objekt
+        club_obj = SimpleNamespace(name=club_name, training_url=url, venue_name=venue_name)
+        try:
+            sessions = scraper.scrape_club(club_obj)
+            all_sessions.extend(sessions)
+        except Exception:
+            logger.exception("Fehler beim Scrapen von %s", url)
+
+    # remove duplicates across sources
+    seen = set()
+    unique: list[TrainingSession] = []
+    for s in all_sessions:
+        key = (s.club_name, s.team_name, s.weekday, s.start_time)
+        if key not in seen:
+            seen.add(key)
+            unique.append(s)
+    return unique

@@ -8,8 +8,8 @@ venues: []
 # den Platz-/Hallennamen (venue_name), dem das Training zugeordnet wird.
 clubs:
   - name: SKV Hochberg
-    training_url: https://www.skv-hochberg.de/training
-    venue_name: Sportplatz SKV Hochberg
+    training_url: https://www.skv-hochberg.de/fußball/
+      venue_name: Sportplatz SKV Hochberg
   - name: SGV Hochdorf
     training_url: https://www.sgv-hochdorf.de/training
     venue_name: Sportplatz SGV Hochdorf
