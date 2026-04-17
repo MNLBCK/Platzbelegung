@@ -9,6 +9,7 @@ import pytest
 
 from platzbelegung.scraper import (
     FussballDeScraper,
+    _is_cancelled_game_status,
     _is_placeholder_team,
     _normalize_venue_name,
     _parse_german_datetime,
@@ -755,6 +756,18 @@ class TestIsPlaceholderTeam:
         assert _is_placeholder_team("") is False
 
 
+class TestIsCancelledGameStatus:
+    def test_absetzung_lowercase(self):
+        assert _is_cancelled_game_status("absetzung") is True
+
+    def test_absetzung_mixed_case_and_whitespace(self):
+        assert _is_cancelled_game_status("  Absetzung  ") is True
+
+    def test_normal_result_not_cancelled(self):
+        assert _is_cancelled_game_status("2:1") is False
+        assert _is_cancelled_game_status("") is False
+
+
 # ---------------------------------------------------------------------------
 # Spielfrei-Filterung in den Parsern
 # ---------------------------------------------------------------------------
@@ -936,3 +949,34 @@ class TestSpielfreiFilteringInMatchplanHtml:
 
         assert len(games) == 1
         assert games[0].guest_team == "FC Muster"
+
+    def test_cancelled_match_in_html_matchplan_excluded(self):
+        """HTML-Matchplan mit Status 'Absetzung' darf keinen Eintrag erzeugen."""
+        html = """
+        <table class="table table-striped table-full-width">
+          <tbody>
+            <tr class="odd row-competition hidden-small">
+              <td class="column-date"><span class="hidden-small inline">Sa, 18.04.26 |&nbsp;</span>17:15</td>
+              <td colspan="3" class="column-team"><a>A-Junioren | Bezirks-FS</a></td>
+              <td colspan="2"><a>FS | 555555555</a></td>
+            </tr>
+            <tr class="odd">
+              <td class="hidden-small"></td>
+              <td class="column-club"><div class="club-name">SGM SKV Hochberg/SGV Hochdorf/VfB Neckarrems</div></td>
+              <td class="column-colon">:</td>
+              <td class="column-club no-border"><div class="club-name">TSV 1899 Benningen II</div></td>
+              <td class="column-score">
+                <a href="https://www.fussball.de/spiel/sgm-skv-hochberg-sgv-hochdorf-vfb-neckarrems-tsv-1899-benningen-ii/-/spiel/0309A2QOSO000000VS5489BUVV4MIU4T"><span class="info-text">Absetzung</span></a>
+              </td>
+              <td class="column-detail">
+                <a href="https://www.fussball.de/spiel/sgm-skv-hochberg-sgv-hochdorf-vfb-neckarrems-tsv-1899-benningen-ii/-/spiel/0309A2QOSO000000VS5489BUVV4MIU4T">Zum Spiel</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        """
+        scraper = FussballDeScraper()
+        with patch.object(scraper._session, "get", return_value=_mock_response(html)):
+            games = scraper.scrape_club_matchplan("CLUB001")
+
+        assert games == []

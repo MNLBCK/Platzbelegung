@@ -411,6 +411,12 @@ function formatGermanDate(DateTimeImmutable $date): string
     return $date->format('d.m.Y');
 }
 
+function isCancelledGameStatus(string $text): bool
+{
+    $normalized = mb_strtolower(normalizeText($text), 'UTF-8');
+    return in_array($normalized, ['absetzung', 'abgesetzt', 'abgesagt', 'ausgefallen', 'annulliert'], true);
+}
+
 function createXPathFromHtml(string $html): DOMXPath
 {
     $dom = new DOMDocument();
@@ -507,11 +513,27 @@ function parseGameDetail(string $url): array
         }
     }
 
+    $statusText = '';
+    foreach ([
+        'string(//*[contains(@class,"result")]//*[contains(@class,"info-text")][1])',
+        'string(//*[contains(@class,"result")][1])',
+        'string(//*[contains(@class,"match-result")]//*[contains(@class,"info-text")][1])',
+        'string(//*[contains(@class,"match-result")][1])',
+        'string(//*[contains(@class,"score")]//*[contains(@class,"info-text")][1])',
+    ] as $expr) {
+        $text = normalizeText($xpath->evaluate($expr));
+        if ($text !== '') {
+            $statusText = $text;
+            break;
+        }
+    }
+
     return [
         'homeLogoUrl' => $logos[0] ?? '',
         'guestLogoUrl' => $logos[1] ?? '',
         'result' => $result,
         'venueName' => $venueName,
+        'statusText' => $statusText,
     ];
 }
 
@@ -589,7 +611,12 @@ function parseClubMatchplanHtml(string $html): array
             return '';
         };
 
-        $scoreText = normalizeText($xpath->evaluate('string(.//td[contains(@class,"column-score") or contains(@class,"column-result")][1])', $row));
+        $rawScoreText = normalizeText($xpath->evaluate('string(.//td[contains(@class,"column-score") or contains(@class,"column-result")][1])', $row));
+        if (isCancelledGameStatus($rawScoreText)) {
+            continue;
+        }
+
+        $scoreText = $rawScoreText;
         if ($scoreText !== '' && !preg_match('/^(\d{1,2}:\d{2}|\d{2}:\d{2})$/', $scoreText)) {
             if (preg_match('/(\d{1,2}:\d{1,2}|-:-)/', $scoreText, $sm)) {
                 $scoreText = $sm[1];
@@ -629,6 +656,9 @@ function parseClubMatchplanHtml(string $html): array
         }
         if ($venueName === '' && !empty($detail['venueName'])) {
             $venueName = normalizeText((string)$detail['venueName']);
+        }
+        if (!empty($detail['statusText']) && isCancelledGameStatus((string)$detail['statusText'])) {
+            continue;
         }
 
         $games[] = [

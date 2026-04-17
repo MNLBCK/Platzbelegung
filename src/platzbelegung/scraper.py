@@ -36,6 +36,9 @@ _VENUE_ID_RE = re.compile(r"/id/([^/?#]+)")
 # Solche Einträge tauchen bei "Spielfrei"-Runden im Spielplan auf und
 # dürfen nicht als Belegungsslots erscheinen.
 _SPIELFREI_MARKERS: frozenset[str] = frozenset({"spielfrei", "bye"})
+_CANCELLED_GAME_MARKERS: frozenset[str] = frozenset(
+    {"absetzung", "abgesetzt", "abgesagt", "ausgefallen", "annulliert"}
+)
 
 
 def _is_placeholder_team(name: str) -> bool:
@@ -45,6 +48,12 @@ def _is_placeholder_team(name: str) -> bool:
     echten Spielgegner.  Solche Zeilen müssen beim Parsen übersprungen werden.
     """
     return name.strip().lower() in _SPIELFREI_MARKERS
+
+
+def _is_cancelled_game_status(text: str) -> bool:
+    """Prüft, ob ein Match-Status auf ein abgesetztes Spiel hinweist."""
+    normalized = text.strip().lower()
+    return bool(normalized and normalized in _CANCELLED_GAME_MARKERS)
 
 
 def filter_games_by_venues(
@@ -430,6 +439,12 @@ class FussballDeScraper:
 
             # Extract competition
             competition = match.get("competition", {}).get("name", "")
+            status_candidates = [
+                str(match.get("status", "")),
+                str(match.get("result", "")),
+                str(match.get("score", "")),
+                str(match.get("matchStatus", "")),
+            ]
 
             if not date_str or not home_team:
                 continue
@@ -438,6 +453,13 @@ class FussballDeScraper:
             if _is_placeholder_team(home_team) or _is_placeholder_team(guest_team):
                 logger.debug(
                     "Überspringe Spielfrei-Eintrag (JSON): %r vs %r (%s)",
+                    home_team, guest_team, date_str,
+                )
+                continue
+
+            if any(_is_cancelled_game_status(candidate) for candidate in status_candidates):
+                logger.debug(
+                    "Überspringe abgesetztes Spiel (JSON): %r vs %r (%s)",
                     home_team, guest_team, date_str,
                 )
                 continue
@@ -535,15 +557,23 @@ class FussballDeScraper:
                 else:
                     venue_name = ""
 
+            status_text = _safe_text(
+                row.select_one(".column-score, .column-result, .score, .result, .match-result")
+            )
+
             game_link = row.select_one("a[href*='/spiel/']")
             game_url = (
                 urljoin(self._cfg.fussball_de_base, game_link.get("href", ""))
                 if game_link
                 else ""
             )
-            if not venue_name and game_url:
+            detail: dict[str, str] = {}
+            if game_url and (not venue_name or not status_text):
                 detail = self._fetch_game_detail(game_url)
+            if not venue_name and detail:
                 venue_name = detail.get("venue_name", "")
+            if not status_text and detail:
+                status_text = detail.get("status_text", "")
 
             # Extract date and time
             date_text = _safe_text(row.select_one(".date, .match-date"))
@@ -568,6 +598,13 @@ class FussballDeScraper:
                 home_team = _safe_text(row.select_one("td:nth-child(3)"))
             if not guest_team:
                 guest_team = _safe_text(row.select_one("td:nth-child(5)"))
+
+            if _is_cancelled_game_status(status_text):
+                logger.debug(
+                    "Überspringe abgesetztes Spiel (HTML): %r vs %r (%s)",
+                    home_team, guest_team, date_text or current_date_text,
+                )
+                continue
 
             # Extract competition
             competition = _safe_text(row.select_one(".competition, .league"))
@@ -649,7 +686,21 @@ class FussballDeScraper:
                 venue_name = text
                 break
 
-        detail = {"venue_name": venue_name}
+        status_text = ""
+        for selector in (
+            ".result .info-text",
+            ".result",
+            ".match-result .info-text",
+            ".match-result",
+            ".score .info-text",
+        ):
+            node = soup.select_one(selector)
+            text = _safe_text(node)
+            if text:
+                status_text = text
+                break
+
+        detail = {"venue_name": venue_name, "status_text": status_text}
         self._game_detail_cache[game_url] = detail
         return detail
 
