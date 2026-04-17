@@ -21,9 +21,10 @@ from platzbelegung.scraper import (
 # Hilfsfunktionen
 # ---------------------------------------------------------------------------
 
-def _mock_response(html: str) -> MagicMock:
+def _mock_response(html: str, content_type: str = "text/html") -> MagicMock:
     mock = MagicMock()
     mock.text = html
+    mock.headers = {"content-type": content_type}
     mock.raise_for_status.return_value = None
     return mock
 
@@ -231,6 +232,54 @@ _REAL_MATCHPLAN_HTML_WITHOUT_VENUES = """
 </div>
 """
 
+_MATCH_DETAIL_HTML_WITH_VENUE = """
+<html><body>
+  <a href="https://www.google.de/maps?q=Kreuzwiesenweg%2C+74850+Schefflenz" class="location" target="_blank">
+    Rasenplatz, Unterschefflenz, Kreuzwiesenweg, 74850 Schefflenz
+  </a>
+</body></html>
+"""
+
+_REAL_MATCHPLAN_HTML_WITH_DETAIL_LINK_BUT_NO_VENUE = """
+<div data-ng-controller="AjaxController" id="id-club-matchplan-table" class="fixtures-matches">
+  <div class="table-container fixtures-matches-table club-matchplan-table">
+    <table class="table table-striped table-full-width">
+      <tbody>
+        <tr class="odd row-competition hidden-small">
+          <td class="column-date"><span class="hidden-small inline">So, 26.04.26 |&nbsp;</span>11:00</td>
+          <td colspan="3" class="column-team">
+            <a>D-Junioren | Landesliga</a>
+          </td>
+          <td colspan="2">
+            <a>ME | 320487020</a>
+          </td>
+        </tr>
+        <tr class="odd">
+          <td class="hidden-small"></td>
+          <td class="column-club">
+            <a class="club-wrapper">
+              <div class="club-name">JSG Seckach/&#8203;Schefflenz</div>
+            </a>
+          </td>
+          <td class="column-colon">:</td>
+          <td class="column-club no-border">
+            <a class="club-wrapper">
+              <div class="club-name">VfK Diedesheim</div>
+            </a>
+          </td>
+          <td class="column-score">
+            <a href="https://www.fussball.de/spiel/jsg-seckach-schefflenz-vfk-diedesheim/-/spiel/02VI0B8K74000000VS5489BTVVTMOPA6">
+              <span class="info-text">26.04.2026 11:00</span>
+            </a>
+          </td>
+          <td class="column-detail"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+"""
+
 _REAL_MATCHPLAN_HTML_WITH_VENUES = """
 <div data-ng-controller="AjaxController" id="id-club-matchplan-table" class="fixtures-matches">
   <div class="table-container fixtures-matches-table club-matchplan-table">
@@ -355,12 +404,11 @@ class TestScrapeClubMatchplan:
     def test_parses_real_matchplan_page_without_venue_rows(self):
         """The exact show-filter=false page has no venue rows, but games must still parse."""
         scraper = FussballDeScraper()
-        mock = MagicMock()
-        mock.headers = {"content-type": "text/html"}
-        mock.text = _REAL_MATCHPLAN_HTML_WITHOUT_VENUES
-        mock.raise_for_status.return_value = None
-
-        with patch.object(scraper._session, "get", return_value=mock):
+        with patch.object(
+            scraper._session,
+            "get",
+            return_value=_mock_response(_REAL_MATCHPLAN_HTML_WITHOUT_VENUES),
+        ):
             games = scraper.scrape_club_matchplan("00ES8GNAVO00000PVV0AG08LVUPGND5I")
 
         assert len(games) == 1
@@ -371,15 +419,30 @@ class TestScrapeClubMatchplan:
         assert games[0].competition == "Herren | Kreisliga A; Kreisliga"
         assert games[0].venue_name == ""
 
+    def test_falls_back_to_game_detail_page_for_missing_venue(self):
+        scraper = FussballDeScraper()
+
+        def mock_get(url, *args, **kwargs):
+            if "02VI0B8K74000000VS5489BTVVTMOPA6" in url:
+                return _mock_response(_MATCH_DETAIL_HTML_WITH_VENUE)
+            return _mock_response(_REAL_MATCHPLAN_HTML_WITH_DETAIL_LINK_BUT_NO_VENUE)
+
+        with patch.object(scraper._session, "get", side_effect=mock_get):
+            games = scraper.scrape_club_matchplan("00ES8GN9B8000042VV0AG08LVUPGND5I")
+
+        assert len(games) == 1
+        assert games[0].home_team == "JSG Seckach/Schefflenz"
+        assert games[0].guest_team == "VfK Diedesheim"
+        assert games[0].venue_name == "Rasenplatz, Unterschefflenz, Kreuzwiesenweg, 74850 Schefflenz"
+
     def test_parses_real_matchplan_page_and_extracts_venues(self):
         """show-venues=true adds row-venue rows that must be assigned to the previous game."""
         scraper = FussballDeScraper()
-        mock = MagicMock()
-        mock.headers = {"content-type": "text/html"}
-        mock.text = _REAL_MATCHPLAN_HTML_WITH_VENUES
-        mock.raise_for_status.return_value = None
-
-        with patch.object(scraper._session, "get", return_value=mock):
+        with patch.object(
+            scraper._session,
+            "get",
+            return_value=_mock_response(_REAL_MATCHPLAN_HTML_WITH_VENUES),
+        ):
             games = scraper.scrape_club_matchplan("00ES8GNAVO00000PVV0AG08LVUPGND5I")
 
         assert len(games) == 2

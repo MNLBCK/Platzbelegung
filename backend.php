@@ -494,10 +494,24 @@ function parseGameDetail(string $url): array
         }
     }
 
+    $venueName = '';
+    foreach ([
+        'string(//a[contains(@class,"location")][1])',
+        'string(//*[contains(@class,"match-place")]//*[contains(@class,"location")][1])',
+        'string(//*[contains(@class,"game-place")]//*[contains(@class,"location")][1])',
+    ] as $expr) {
+        $text = normalizeText($xpath->evaluate($expr));
+        if ($text !== '') {
+            $venueName = $text;
+            break;
+        }
+    }
+
     return [
         'homeLogoUrl' => $logos[0] ?? '',
         'guestLogoUrl' => $logos[1] ?? '',
         'result' => $result,
+        'venueName' => $venueName,
     ];
 }
 
@@ -612,6 +626,9 @@ function parseClubMatchplanHtml(string $html): array
         }
         if ($scoreText === '' && !empty($detail['result'])) {
             $scoreText = (string)$detail['result'];
+        }
+        if ($venueName === '' && !empty($detail['venueName'])) {
+            $venueName = normalizeText((string)$detail['venueName']);
         }
 
         $games[] = [

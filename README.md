@@ -205,6 +205,22 @@ platzbelegung scrape
 
 Wenn der Hoster kein SSH anbietet, genügt bereits ein FTP-Client wie FileZilla, Cyberduck oder das Deployment-Tool des Providers.
 
+#### Release per Skript
+
+Für versionierte Releases gibt es zusätzlich ein Release-Skript. Es synchronisiert die relevanten Versionsdateien, erstellt Commit + Tag, pusht beides und legt anschließend ein GitHub Release mit automatisch generierten Notes an.
+
+```bash
+bash scripts/release.sh v0.1.71
+```
+
+Das Skript aktualisiert dabei:
+
+- `VERSION`
+- `pyproject.toml`
+- `package.json`
+- `package-lock.json`
+- statische Fallback-Version in `public/index.html`
+
 #### Empfohlene Struktur auf dem Server
 
 Beispiel für eine Subdomain wie `platzbelegung.sghochx.de`:
@@ -258,6 +274,7 @@ bash scripts/deploy.sh /pfad/zu/meiner.deploy.env
 
 #### Wichtige Dateien für das Skript
 
+- `scripts/release.sh` → Release-Logik für Version, Tag und GitHub Release
 - `scripts/deploy.sh` → Deploy-Logik
 - `deploy.example.env` → commitbare Vorlage ohne echte Zugangsdaten
 - `.deploy.local.env` → lokale Datei mit echten Zugangsdaten, wird nicht committed

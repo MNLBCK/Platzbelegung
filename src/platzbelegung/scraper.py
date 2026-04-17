@@ -17,6 +17,7 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote as _url_quote
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -196,6 +197,7 @@ class FussballDeScraper:
     def __init__(self, cfg: ScraperConfig | None = None) -> None:
         self._cfg = cfg or ScraperConfig()
         self._session = requests.Session()
+        self._game_detail_cache: dict[str, dict[str, str]] = {}
         self._session.headers.update(
             {
                 "User-Agent": self._cfg.user_agent,
@@ -533,6 +535,16 @@ class FussballDeScraper:
                 else:
                     venue_name = ""
 
+            game_link = row.select_one("a[href*='/spiel/']")
+            game_url = (
+                urljoin(self._cfg.fussball_de_base, game_link.get("href", ""))
+                if game_link
+                else ""
+            )
+            if not venue_name and game_url:
+                detail = self._fetch_game_detail(game_url)
+                venue_name = detail.get("venue_name", "")
+
             # Extract date and time
             date_text = _safe_text(row.select_one(".date, .match-date"))
             time_text = _safe_text(row.select_one(".time, .match-time"))
@@ -596,6 +608,50 @@ class FussballDeScraper:
             )
 
         return games
+
+    def _fetch_game_detail(self, game_url: str) -> dict[str, str]:
+        """Lädt ergänzende Spieldetails von der Detailseite.
+
+        Aktuell wird nur die Spielstätte benötigt. Die Ergebnisse werden je URL
+        gecacht, damit derselbe Link bei mehrfacher Verwendung nicht erneut
+        angefragt wird.
+        """
+        if not game_url:
+            return {}
+
+        cached = self._game_detail_cache.get(game_url)
+        if cached is not None:
+            return cached
+
+        try:
+            response = self._session.get(
+                game_url, timeout=self._cfg.timeout_seconds
+            )
+            response.raise_for_status()
+        except requests.exceptions.RequestException:
+            logger.debug(
+                "Failed to fetch game detail page: %s", game_url, exc_info=True
+            )
+            self._game_detail_cache[game_url] = {}
+            return {}
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        venue_name = ""
+        for selector in (
+            "a.location",
+            ".location",
+            ".match-place .location",
+            ".game-place .location",
+        ):
+            node = soup.select_one(selector)
+            text = _safe_text(node)
+            if text:
+                venue_name = text
+                break
+
+        detail = {"venue_name": venue_name}
+        self._game_detail_cache[game_url] = detail
+        return detail
 
     # ------------------------------------------------------------------
     # Interne Parser – Venue Pages (Deprecated)
