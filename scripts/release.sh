@@ -36,6 +36,10 @@ require_clean_worktree() {
   fi
 }
 
+gh_safe() {
+  env -u GITHUB_TOKEN gh "$@"
+}
+
 require_tool() {
   local tool="$1"
   command -v "$tool" >/dev/null 2>&1 || {
@@ -55,7 +59,7 @@ ensure_version_not_exists() {
     exit 1
   fi
 
-  if gh release view "$TAG_VERSION" >/dev/null 2>&1; then
+  if gh_safe release view "$TAG_VERSION" >/dev/null 2>&1; then
     echo "GitHub Release existiert bereits: $TAG_VERSION" >&2
     exit 1
   fi
@@ -121,6 +125,6 @@ git -C "$ROOT_DIR" commit -m "Release $TAG_VERSION"
 git -C "$ROOT_DIR" tag -a "$TAG_VERSION" -m "Release $TAG_VERSION"
 git -C "$ROOT_DIR" push origin HEAD
 git -C "$ROOT_DIR" push origin "$TAG_VERSION"
-gh release create "$TAG_VERSION" --repo MNLBCK/Platzbelegung --verify-tag --generate-notes --title "$TAG_VERSION"
+gh_safe release create "$TAG_VERSION" --repo MNLBCK/Platzbelegung --verify-tag --generate-notes --title "$TAG_VERSION"
 
 echo "Release erstellt: $TAG_VERSION"
