@@ -868,6 +868,17 @@ main {
   user-select: none;
   font-size: 1.45rem;
 }
+.team-overview-summary-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.team-overview-summary-spinner {
+  width: 20px;
+  height: 20px;
+  border-width: 3px;
+  vertical-align: middle;
+}
 .team-overview summary::-webkit-details-marker {
   display: none;
 }

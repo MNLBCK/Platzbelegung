@@ -138,14 +138,32 @@ function formatMetaDate(value) {
   });
 }
 
+function setTeamOverviewSummary(summaryEl, label, isOpen = false) {
+  if (!summaryEl) return;
+  summaryEl.textContent = (isOpen ? '▾ ' : '▸ ') + label;
+}
+
+function setTeamOverviewSummaryLoading(summaryEl) {
+  if (!summaryEl) return;
+  summaryEl.innerHTML =
+    '<span class="team-overview-summary-loading">' +
+      '<span class="spinner team-overview-summary-spinner" aria-hidden="true"></span>' +
+      '<span>Mannschaften werden geladen…</span>' +
+    '</span>';
+}
+
 function setTeamOverviewLoading() {
   const wrap = $('team-overview');
+  const loadingEl = $('team-overview-loading');
   const listEl = $('team-overview-list');
   const summaryEl = $('team-overview-summary');
   if (!wrap || !listEl || !summaryEl) return;
+  wrap.ontoggle = null;
   wrap.open = false;
   listEl.innerHTML = '';
-  summaryEl.textContent = '▸ Mannschaften werden geladen…';
+  setTeamOverviewSummaryLoading(summaryEl);
+  showEl(loadingEl, false);
+  showEl(listEl, false);
   showEl(wrap, true);
 }
 
@@ -687,19 +705,23 @@ function dedupeGames(games) {
 
 function renderTeamOverview() {
   const wrap = $('team-overview');
+  const loadingEl = $('team-overview-loading');
   const listEl = $('team-overview-list');
   const summaryEl = $('team-overview-summary');
   if (!wrap || !listEl || !summaryEl) return;
   if (!state.club || !state.club.id || !state.games.length) {
+    wrap.ontoggle = null;
     wrap.open = false;
+    showEl(loadingEl, false);
     showEl(wrap, false);
     listEl.innerHTML = '';
-    summaryEl.textContent = '▸ Mannschaften';
+    showEl(listEl, true);
+    setTeamOverviewSummary(summaryEl, 'Mannschaften', false);
     return;
   }
   const teams = getTeamEntries();
-  const isOpen = wrap.hasAttribute('open');
-  summaryEl.textContent = (isOpen ? '▾ ' : '▸ ') + teams.length + ' Mannschaften';
+  const isOpen = wrap.open;
+  setTeamOverviewSummary(summaryEl, teams.length + ' Mannschaften', isOpen);
   listEl.innerHTML =
     '<div class="team-overview-table team-overview-table--head">' +
       '<span>Team</span>' +
@@ -720,8 +742,10 @@ function renderTeamOverview() {
     btn.addEventListener('click', (e) => { e.stopPropagation(); openTrainingModal(btn.dataset.team); });
   });
   wrap.ontoggle = () => {
-    summaryEl.textContent = (wrap.open ? '▾ ' : '▸ ') + teams.length + ' Mannschaften';
+    setTeamOverviewSummary(summaryEl, teams.length + ' Mannschaften', wrap.open);
   };
+  showEl(loadingEl, false);
+  showEl(listEl, true);
   showEl(wrap, teams.length > 0);
 }
 
@@ -1049,6 +1073,7 @@ async function fetchGames(dateFrom, dateTo) {
   const allClubs = getAllClubs();
   if (!allClubs.length) return;
   showEl($('venues-loading'), true);
+  setTeamOverviewLoading();
   showEl($('venues-empty'), false);
   showEl($('venues-error'), false);
   showError('');
@@ -1174,6 +1199,14 @@ function getPostalCode(value) {
   return match ? match[0] : '';
 }
 
+function getSelectedPostalCodes(selectedClubs) {
+  return new Set(
+    (selectedClubs || [])
+      .map(club => getPostalCode(club?.location || ''))
+      .filter(Boolean)
+  );
+}
+
 function isQueryCoveredBySelectedClubs(queryName, selectedClubs) {
   const queryTokens = getRelevantTokens(queryName);
   if (!queryTokens.length) return false;
@@ -1233,6 +1266,7 @@ function scoreClubSuggestion(queryName, candidate, referenceLocations) {
 
 function pickBestSgClubSuggestion(queryName, clubs, existingIds, referenceLocations, selectedClubs) {
   const queryTokens = getRelevantTokens(queryName);
+  const selectedPostalCodes = getSelectedPostalCodes(selectedClubs);
   const candidates = (Array.isArray(clubs) ? clubs : [])
     .filter(club => club && club.id && !existingIds.has(club.id))
     .map(club => ({ club, ...scoreClubSuggestion(queryName, club, referenceLocations) }))
@@ -1243,6 +1277,13 @@ function pickBestSgClubSuggestion(queryName, clubs, existingIds, referenceLocati
 
   const best = candidates[0];
   const sameNameTier = candidates.filter(entry => entry.nameScore === best.nameScore);
+  const bestPostalCode = getPostalCode(best.club?.location || '');
+
+  // If we know the PLZ area of the selected clubs, suggestions from a different
+  // PLZ area are considered implausible and must be suppressed.
+  if (selectedPostalCodes.size > 0) {
+    if (!bestPostalCode || !selectedPostalCodes.has(bestPostalCode)) return null;
+  }
 
   // If multiple clubs match the name equally well but none matches our location,
   // suppress the suggestion instead of proposing a likely wrong club.
