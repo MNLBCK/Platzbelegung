@@ -106,6 +106,69 @@ function loadBuildMeta(): array
     return is_array($parsed) ? $parsed : [];
 }
 
+function runGitCommand(array $args): string
+{
+    $cmd = 'git -C ' . escapeshellarg(__DIR__);
+    foreach ($args as $arg) {
+        $cmd .= ' ' . escapeshellarg((string)$arg);
+    }
+    $cmd .= ' 2>/dev/null';
+    $out = shell_exec($cmd);
+    return trim((string)$out);
+}
+
+function loadGitVersionMeta(string $preferredReleaseVersion): array
+{
+    $gitDir = runGitCommand(['rev-parse', '--git-dir']);
+    if ($gitDir === '') {
+        return [];
+    }
+
+    $branch = runGitCommand(['rev-parse', '--abbrev-ref', 'HEAD']);
+    $releaseVersion = $preferredReleaseVersion;
+
+    if ($releaseVersion !== '') {
+        $tagExists = runGitCommand(['rev-parse', '-q', '--verify', 'refs/tags/' . $releaseVersion]);
+        if ($tagExists === '') {
+            $releaseVersion = '';
+        }
+    }
+
+    if ($releaseVersion === '') {
+        $releaseVersion = runGitCommand(['describe', '--tags', '--abbrev=0', '--match', 'v*']);
+    }
+
+    if ($releaseVersion === '') {
+        return [
+            'branch' => $branch,
+        ];
+    }
+
+    $commitsSinceRelease = (int)(runGitCommand(['rev-list', '--count', $releaseVersion . '..HEAD']) ?: '0');
+    $diffFilesRaw = runGitCommand(['diff', '--name-only', $releaseVersion . '..HEAD']);
+    $changedFilesSinceRelease = $diffFilesRaw === ''
+        ? 0
+        : count(array_filter(array_map('trim', explode("\n", $diffFilesRaw)), static fn($line) => $line !== ''));
+
+    $displayVersion = $releaseVersion;
+    if ($commitsSinceRelease > 0 || $changedFilesSinceRelease > 0) {
+        $displayVersion = sprintf(
+            '%s+%dc+%df',
+            $releaseVersion,
+            $commitsSinceRelease,
+            $changedFilesSinceRelease
+        );
+    }
+
+    return [
+        'branch' => $branch,
+        'releaseVersion' => $releaseVersion,
+        'displayVersion' => $displayVersion,
+        'commitsSinceRelease' => $commitsSinceRelease,
+        'changedFilesSinceRelease' => $changedFilesSinceRelease,
+    ];
+}
+
 function loadAppMeta(): array
 {
     $baseVersion = loadAppVersion();
@@ -113,14 +176,19 @@ function loadAppMeta(): array
     $snapshot = loadLatestSnapshot();
     $snapshotGeneratedAt = is_array($snapshot) ? ($snapshot['generated_at'] ?? null) : null;
 
-    $displayVersion = trim((string)($buildMeta['displayVersion'] ?? $baseVersion));
-    if ($displayVersion === '') {
-        $displayVersion = $baseVersion;
-    }
-
     $releaseVersion = trim((string)($buildMeta['releaseVersion'] ?? $baseVersion));
     if ($releaseVersion === '') {
         $releaseVersion = $baseVersion;
+    }
+
+    $gitMeta = loadGitVersionMeta($releaseVersion);
+    if (!empty($gitMeta['releaseVersion'])) {
+        $releaseVersion = trim((string)$gitMeta['releaseVersion']);
+    }
+
+    $displayVersion = trim((string)($gitMeta['displayVersion'] ?? $buildMeta['displayVersion'] ?? $baseVersion));
+    if ($displayVersion === '') {
+        $displayVersion = $baseVersion;
     }
 
     $repositoryUrl = trim((string)($buildMeta['repositoryUrl'] ?? APP_REPOSITORY_URL));
@@ -146,6 +214,9 @@ function loadAppMeta(): array
         'releaseUrl' => $releaseUrl,
         'deployedAt' => $deployedAt !== '' ? $deployedAt : null,
         'snapshotGeneratedAt' => is_string($snapshotGeneratedAt) && $snapshotGeneratedAt !== '' ? $snapshotGeneratedAt : null,
+        'branch' => trim((string)($gitMeta['branch'] ?? $buildMeta['branch'] ?? '')),
+        'commitsSinceRelease' => (int)($gitMeta['commitsSinceRelease'] ?? $buildMeta['commitsSinceRelease'] ?? 0),
+        'changedFilesSinceRelease' => (int)($gitMeta['changedFilesSinceRelease'] ?? $buildMeta['changedFilesSinceRelease'] ?? 0),
     ];
 }
 

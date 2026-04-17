@@ -39,7 +39,12 @@ function loadSession() {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      ...parsed,
+      games: sanitizeGames(parsed.games),
+    };
   } catch (_) { return null; }
 }
 
@@ -109,6 +114,15 @@ function showError(msg) {
   const el = $('error-msg');
   el.textContent = msg;
   showEl(el, !!msg);
+}
+
+function sanitizeGame(game) {
+  if (!game || typeof game !== 'object') return game;
+  return { ...game, result: '' };
+}
+
+function sanitizeGames(games) {
+  return (Array.isArray(games) ? games : []).map(sanitizeGame);
 }
 
 function formatMetaDate(value) {
@@ -581,11 +595,7 @@ function getClubUrl(club) {
 }
 
 function getGameResult(game) {
-  const result = String(game.result || '').trim();
-  if (!result || result === '-:-') return '';
-  const start = new Date(game.startDate || '');
-  if (isNaN(start.getTime()) || start > new Date()) return '';
-  return result;
+  return '';
 }
 
 function getTeamSortRank(entry) {
@@ -1029,7 +1039,7 @@ async function fetchGamesForClub(club, dateFrom, dateTo) {
     const resp = await fetch(url);
     if (!resp.ok) return [];
     const data = await resp.json();
-    return Array.isArray(data) ? data : [];
+    return sanitizeGames(data);
   } catch (_) {
     return [];
   }

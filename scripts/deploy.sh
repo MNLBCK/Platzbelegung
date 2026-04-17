@@ -154,6 +154,9 @@ fi
 BASE_VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION" 2>/dev/null || printf 'dev')"
 DISPLAY_VERSION="$BASE_VERSION"
 RELEASE_VERSION="$BASE_VERSION"
+COMMITS_SINCE_RELEASE="0"
+CHANGED_FILES_SINCE_RELEASE="0"
+CURRENT_BRANCH=""
 REPOSITORY_URL="https://github.com/MNLBCK/Platzbelegung"
 DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 BUILD_META_PATH="$ROOT_DIR/BUILD_META.json"
@@ -163,19 +166,21 @@ cleanup() {
 trap cleanup EXIT
 
 if git -C "$ROOT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+  CURRENT_BRANCH="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '')"
   if git -C "$ROOT_DIR" rev-parse -q --verify "refs/tags/$BASE_VERSION" >/dev/null 2>&1; then
     COMMITS_SINCE_RELEASE="$(git -C "$ROOT_DIR" rev-list --count "$BASE_VERSION..HEAD")"
-    if [[ "$COMMITS_SINCE_RELEASE" -gt 0 ]]; then
-      DISPLAY_VERSION="${BASE_VERSION}+${COMMITS_SINCE_RELEASE}"
-    fi
   else
     LAST_TAG="$(git -C "$ROOT_DIR" describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
     if [[ -n "$LAST_TAG" ]]; then
       RELEASE_VERSION="$LAST_TAG"
       COMMITS_SINCE_RELEASE="$(git -C "$ROOT_DIR" rev-list --count "$LAST_TAG..HEAD")"
-      if [[ "$COMMITS_SINCE_RELEASE" -gt 0 ]]; then
-        DISPLAY_VERSION="${BASE_VERSION}+${COMMITS_SINCE_RELEASE}"
-      fi
+    fi
+  fi
+
+  if [[ -n "$RELEASE_VERSION" && "$RELEASE_VERSION" != "dev" ]]; then
+    CHANGED_FILES_SINCE_RELEASE="$(git -C "$ROOT_DIR" diff --name-only "$RELEASE_VERSION..HEAD" | sed '/^$/d' | wc -l | tr -d ' ')"
+    if [[ "$COMMITS_SINCE_RELEASE" -gt 0 || "$CHANGED_FILES_SINCE_RELEASE" -gt 0 ]]; then
+      DISPLAY_VERSION="${RELEASE_VERSION}+${COMMITS_SINCE_RELEASE}c+${CHANGED_FILES_SINCE_RELEASE}f"
     fi
   fi
 fi
@@ -190,6 +195,9 @@ RELEASE_VERSION="$RELEASE_VERSION" \
 REPOSITORY_URL="$REPOSITORY_URL" \
 RELEASE_URL="$RELEASE_URL" \
 DEPLOYED_AT="$DEPLOYED_AT" \
+COMMITS_SINCE_RELEASE="$COMMITS_SINCE_RELEASE" \
+CHANGED_FILES_SINCE_RELEASE="$CHANGED_FILES_SINCE_RELEASE" \
+CURRENT_BRANCH="$CURRENT_BRANCH" \
 python3 - <<'PY' > "$BUILD_META_PATH"
 import json
 import os
@@ -199,6 +207,9 @@ print(json.dumps({
   "repositoryUrl": os.environ["REPOSITORY_URL"],
   "releaseUrl": os.environ["RELEASE_URL"],
   "deployedAt": os.environ["DEPLOYED_AT"],
+  "commitsSinceRelease": int(os.environ["COMMITS_SINCE_RELEASE"]),
+  "changedFilesSinceRelease": int(os.environ["CHANGED_FILES_SINCE_RELEASE"]),
+  "branch": os.environ["CURRENT_BRANCH"],
 }, ensure_ascii=False))
 PY
 
