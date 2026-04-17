@@ -603,26 +603,48 @@ main {
   width: 100%;
 }
 
-/* Selected club info card */
 .selected-club-info {
   margin-top: 0.8rem;
 }
+
 .selected-club-label {
   font-size: 0.78rem;
   color: var(--text-light);
-  margin-bottom: 0.4rem;
-  font-weight: 500;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
 }
+
+.selected-club-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 0.8rem;
+  align-items: stretch;
+}
+
 .selected-club-card {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem 1rem;
+  padding: 0.8rem 1rem;
   background: var(--white);
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  width: 100%;
+  height: 100%;
 }
+
+.selected-club-card-main {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+  flex: 1;
+}
+
 .selected-club-card--empty {
+  display: flex;
   color: var(--text-light);
   font-style: italic;
   justify-content: center;
@@ -633,13 +655,14 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
 }
 .selected-club-logo {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   object-fit: contain;
+  display: block;
 }
 .selected-club-logo-fallback {
   width: 64px;
@@ -656,8 +679,24 @@ main {
 .selected-club-details {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.18rem;
   min-width: 0;
+  justify-content: center;
+  flex: 1;
+}
+
+.selected-club-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.selected-club-actions .btn {
+  white-space: nowrap;
 }
 .selected-club-name {
   font-size: 1rem;
@@ -679,31 +718,50 @@ main {
 .selected-club-link a:hover {
   text-decoration: underline;
 }
-/* Additional club card (from Spielgemeinschaft) */
-.selected-club-card + .selected-club-card {
-  margin-top: 0.5rem;
-}
-.selected-club-card--additional {
-  border-color: var(--primary);
-  opacity: 0.92;
+.selected-club-card {
   position: relative;
+  padding-right: 3.4rem;
 }
+
 .sg-remove-club-btn {
-  margin-left: auto;
-  flex-shrink: 0;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.55rem;
   background: none;
   border: none;
   font-size: 1.2rem;
   color: var(--text-light);
   cursor: pointer;
   line-height: 1;
-  padding: 0.1rem 0.3rem;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
   border-radius: 4px;
-  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .sg-remove-club-btn:hover {
   color: var(--danger);
   background: rgba(192,57,43,.08);
+}
+
+@media (max-width: 880px) {
+  .selected-club-card {
+    flex-direction: column;
+    align-items: stretch;
+    row-gap: 0.75rem;
+  }
+
+  .selected-club-card-main {
+    align-items: flex-start;
+  }
+
+  .selected-club-actions {
+    justify-content: flex-end;
+    width: 100%;
+    padding-left: 0;
+  }
 }
 /* Spielgemeinschaft suggestion banner */
 .sg-suggestion {
@@ -821,7 +879,7 @@ main {
 }
 .team-overview-table {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr) minmax(0, 1fr) 64px;
   gap: 0.6rem;
   padding: 0.55rem 0;
   border-top: 1px solid #eef2ee;
@@ -844,6 +902,26 @@ main {
   font-size: 0.82rem;
   color: var(--text-light);
   min-width: 0;
+}
+
+/* small action column for +Training button */
+.team-overview-actions {
+  justify-self: end;
+  align-self: center;
+}
+
+/* Branch badge in header */
+.branch-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.95);
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-left: 0.5rem;
+  border: 1px solid rgba(255,255,255,0.12);
 }
 
 /* Venues List / Legend */

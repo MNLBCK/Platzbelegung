@@ -36,9 +36,13 @@ def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
     Verwendet primär die club matchplan API (ajax.club.matchplan) und filtert
     anschließend nach konfigurierten Sportstätten. Falls --venue-id angegeben
     wird, wird der alte venue-basierte Scraper als Fallback verwendet.
+
+    Zusätzlich werden Trainingszeiten von konfigurierten Vereinswebseiten gescraped.
     """
     from platzbelegung.scraper import FussballDeScraper, filter_games_by_venue_configs
     from platzbelegung.storage import save_snapshot
+    from platzbelegung.training_scraper import ClubWebsiteScraper
+    from platzbelegung.models import TrainingSession
 
     # Check if user wants to use old venue-based scraping
     use_venue_scraping = args.venue_id is not None and len(args.venue_id) > 0
@@ -123,6 +127,30 @@ def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
             )
             return 1
 
+    # Trainingszeiten von Vereinswebseiten scrapen
+    all_training: list[TrainingSession] = []
+    if app_cfg.clubs:
+        console.print()
+        console.print(
+            f"Scraping Trainingszeiten von {len(app_cfg.clubs)} Vereinswebseite(n) …"
+        )
+        training_scraper = ClubWebsiteScraper(app_cfg.scraper)
+        for club_cfg in app_cfg.clubs:
+            if not club_cfg.training_url:
+                continue
+            console.print(
+                f"  [cyan]{club_cfg.name}[/cyan] → {club_cfg.training_url}"
+            )
+            try:
+                sessions = training_scraper.scrape_club(club_cfg)
+                console.print(f"    → {len(sessions)} Trainingseinheit(en) gefunden")
+                all_training.extend(sessions)
+            except Exception as exc:  # noqa: BLE001
+                console.print(f"    [red]Fehler:[/red] {exc}")
+                logger.debug(
+                    "Unexpected error scraping training for %s", club_cfg.name, exc_info=True
+                )
+
     # Collect venue IDs for metadata
     if use_venue_scraping:
         venue_ids_meta = args.venue_id
@@ -134,12 +162,17 @@ def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
         "club_name": app_cfg.club_name,
         "season": app_cfg.season,
         "venues": venue_ids_meta,
+        "clubs": [
+            {"name": c.name, "training_url": c.training_url}
+            for c in app_cfg.clubs
+        ],
     }
 
     snap_path = save_snapshot(
         all_games,
         config_meta,
         snapshots_dir=app_cfg.output.snapshots_dir,
+        training_sessions=all_training,
     )
     console.print()
     console.print(
@@ -159,9 +192,14 @@ def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
 
 def _cmd_html(args: argparse.Namespace, app_cfg, console: Console) -> int:
     """Generiert eine statische HTML-Datei aus dem letzten Snapshot."""
-    from platzbelegung.parser import scraped_games_to_occupancy
+    from platzbelegung.parser import scraped_games_to_occupancy, training_sessions_to_occupancy
     from platzbelegung.render_html import render_html
-    from platzbelegung.storage import games_from_snapshot, load_latest_snapshot
+    from platzbelegung.storage import (
+        games_from_snapshot,
+        load_latest_snapshot,
+        training_sessions_from_snapshot,
+    )
+    from platzbelegung.config import get_date_range
 
     snapshot = load_latest_snapshot(app_cfg.output.data_dir)
     if snapshot is None:
@@ -178,6 +216,15 @@ def _cmd_html(args: argparse.Namespace, app_cfg, console: Console) -> int:
         default_duration_minutes=app_cfg.scraper.default_game_duration_minutes,
         game_durations=app_cfg.scraper.game_durations,
     )
+
+    # Trainingszeiten expandieren
+    training_sessions = training_sessions_from_snapshot(snapshot)
+    if training_sessions:
+        date_start, date_end = get_date_range()
+        training_slots = training_sessions_to_occupancy(
+            training_sessions, date_start, date_end
+        )
+        slots = slots + training_slots
 
     output_path = Path(args.output or app_cfg.output.html_file)
     render_html(
@@ -199,8 +246,13 @@ def _cmd_html(args: argparse.Namespace, app_cfg, console: Console) -> int:
 def _cmd_show(_args: argparse.Namespace, app_cfg, console: Console) -> int:
     """Zeigt die Platzbelegung aus dem letzten Snapshot im Terminal an."""
     from platzbelegung.display import display_occupancy
-    from platzbelegung.parser import scraped_games_to_occupancy
-    from platzbelegung.storage import games_from_snapshot, load_latest_snapshot
+    from platzbelegung.parser import scraped_games_to_occupancy, training_sessions_to_occupancy
+    from platzbelegung.storage import (
+        games_from_snapshot,
+        load_latest_snapshot,
+        training_sessions_from_snapshot,
+    )
+    from platzbelegung.config import get_date_range
 
     snapshot = load_latest_snapshot(app_cfg.output.data_dir)
     if snapshot is None:
@@ -217,6 +269,15 @@ def _cmd_show(_args: argparse.Namespace, app_cfg, console: Console) -> int:
         default_duration_minutes=app_cfg.scraper.default_game_duration_minutes,
         game_durations=app_cfg.scraper.game_durations,
     )
+
+    # Trainingszeiten expandieren
+    training_sessions = training_sessions_from_snapshot(snapshot)
+    if training_sessions:
+        date_start, date_end = get_date_range()
+        training_slots = training_sessions_to_occupancy(
+            training_sessions, date_start, date_end
+        )
+        slots = slots + training_slots
 
     generated_at = snapshot.get("generated_at", "")
     console.print(f"[bold]Platzbelegung[/bold]  [dim]Stand: {generated_at}[/dim]")

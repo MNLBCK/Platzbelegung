@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from platzbelegung.models import ScrapedGame
+from platzbelegung.models import ScrapedGame, TrainingSession
 
 
 def _ensure_dir(path: str | Path) -> Path:
@@ -24,6 +24,7 @@ def save_snapshot(
     games: list[ScrapedGame],
     config_meta: dict,
     snapshots_dir: str = "data/snapshots",
+    training_sessions: list[TrainingSession] | None = None,
 ) -> Path:
     """Speichert einen JSON-Snapshot mit Zeitstempel.
 
@@ -35,6 +36,7 @@ def save_snapshot(
         games: Liste der gescrapten Spiele.
         config_meta: Metadaten zur Konfiguration (wird in den Snapshot aufgenommen).
         snapshots_dir: Verzeichnis für Zeitstempel-Snapshots.
+        training_sessions: Optional – Liste der gescrapten Trainingseinheiten.
 
     Returns:
         Pfad der neuen Snapshot-Datei.
@@ -48,6 +50,7 @@ def save_snapshot(
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "config": config_meta,
         "games": [g.to_dict() for g in games],
+        "training_sessions": [t.to_dict() for t in (training_sessions or [])],
     }
 
     snap_path = Path(snapshots_dir) / f"{filename_ts}.json"
@@ -98,3 +101,13 @@ def games_from_snapshot(snapshot: dict) -> list[ScrapedGame]:
         ScrapedGame.from_dict(g, scraped_at)
         for g in snapshot.get("games", [])
     ]
+
+
+def training_sessions_from_snapshot(snapshot: dict) -> list[TrainingSession]:
+    """Extrahiert TrainingSession-Objekte aus einem geladenen Snapshot-Dict."""
+    scraped_at = snapshot.get("generated_at", "")
+    return [
+        TrainingSession.from_dict(t, scraped_at)
+        for t in snapshot.get("training_sessions", [])
+    ]
+

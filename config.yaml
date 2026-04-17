@@ -3,6 +3,19 @@ club:
   name: SKV Hochberg
 season: "2526"
 venues: []
+# Vereine, deren Webseiten nach Trainingszeiten durchsucht werden sollen.
+# Jeder Eintrag benötigt einen Namen, eine URL (training_url) und optional
+# den Platz-/Hallennamen (venue_name), dem das Training zugeordnet wird.
+clubs:
+  - name: SKV Hochberg
+    training_url: https://www.skv-hochberg.de/fußball/
+    venue_name: Sportplatz SKV Hochberg
+  - name: SGV Hochdorf
+    training_url: https://www.sgv-hochdorf.de/training
+    venue_name: Sportplatz SGV Hochdorf
+  - name: VfB Neckarrems
+    training_url: https://www.vfb-neckarrems.de/training
+    venue_name: Sportplatz VfB Neckarrems
 date_range:
   mode: auto
 scraper:

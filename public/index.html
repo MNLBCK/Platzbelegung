@@ -53,12 +53,84 @@
         <button id="club-search-btn" class="btn btn-primary">Suchen</button>
       </div>
       <div id="club-search-results" class="search-results hidden"></div>
-      <div id="selected-club-info" class="selected-club-info hidden"></div>
-      <div id="sg-suggestion" class="sg-suggestion hidden"></div>
-      <details id="team-overview" class="team-overview hidden">
-        <summary><span id="team-overview-summary">▸ Mannschaften</span></summary>
-        <div id="team-overview-list" class="team-overview-list"></div>
+      <div id="selected-club-info" class="selected-club-info">
+        <div class="selected-club-label">Ausgewählte Vereine</div>
+        <div class="selected-club-cards">
+          <div class="selected-club-card">
+            <div class="selected-club-card-main">
+              <div class="selected-club-logo-wrap"><img class="selected-club-logo" src="https://www.fussball.de/export.media/-/action/getLogo/format/7/id/00ES8GNAVO00000RVV0AG08LVUPGND5I" alt="SGV Hochdorf" loading="lazy"></div>
+              <div class="selected-club-details">
+                <div class="selected-club-name">SGV Hochdorf</div>
+                <div class="selected-club-location">71686 Remseck am Neckar</div>
+                <div class="selected-club-link"><a href="https://www.fussball.de/verein/sgv-hochdorf-wuerttemberg/-/id/00ES8GNAVO00000RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">Verein auf fussball.de ↗</a></div>
+              </div>
+            </div>
+            <div class="selected-club-actions">
+              <button class="btn btn-sm" data-club-id="00ES8GNAVO00000RVV0AG08LVUPGND5I" title="+ Training" aria-label="Training melden">+ Training</button>
+            </div>
+          </div>
+          <div class="selected-club-card selected-club-card--additional">
+            <div class="selected-club-card-main">
+              <div class="selected-club-logo-wrap"><img class="selected-club-logo" src="https://www.fussball.de/export.media/-/action/getLogo/format/7/id/00ES8GNAVO00009RVV0AG08LVUPGND5I" alt="VfB Neckarrems" loading="lazy"></div>
+              <div class="selected-club-details">
+                <div class="selected-club-name">VfB Neckarrems</div>
+                <div class="selected-club-location">71686 Remseck am Neckar</div>
+                <div class="selected-club-link"><a href="https://www.fussball.de/verein/vfb-neckarrems-wuerttemberg/-/id/00ES8GNAVO00009RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">Verein auf fussball.de ↗</a></div>
+              </div>
+            </div>
+            <div class="selected-club-actions">
+              <button class="btn btn-sm" data-club-id="00ES8GNAVO00009RVV0AG08LVUPGND5I" title="+ Training" aria-label="Training melden">+ Training</button>
+              <button class="sg-remove-club-btn" data-club-id="00ES8GNAVO00009RVV0AG08LVUPGND5I" title="Verein entfernen" aria-label="Verein entfernen">×</button>
+            </div>
+          </div>
+          <div class="selected-club-card selected-club-card--additional">
+            <div class="selected-club-card-main">
+              <div class="selected-club-logo-wrap"><img class="selected-club-logo" src="https://www.fussball.de/export.media/-/action/getLogo/format/7/id/00ES8GNAVO00000PVV0AG08LVUPGND5I" alt="SKV Hochberg" loading="lazy"></div>
+              <div class="selected-club-details">
+                <div class="selected-club-name">SKV Hochberg</div>
+                <div class="selected-club-location">71686 Remseck am Neckar</div>
+                <div class="selected-club-link"><a href="https://www.fussball.de/verein/skv-hochberg-wuerttemberg/-/id/00ES8GNAVO00000PVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">Verein auf fussball.de ↗</a></div>
+              </div>
+            </div>
+            <div class="selected-club-actions">
+              <button class="btn btn-sm" data-club-id="00ES8GNAVO00000PVV0AG08LVUPGND5I" title="+ Training" aria-label="Training melden">+ Training</button>
+              <button class="sg-remove-club-btn" data-club-id="00ES8GNAVO00000PVV0AG08LVUPGND5I" title="Verein entfernen" aria-label="Verein entfernen">×</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="sg-suggestion" class="sg-suggestion">
+        <div class="sg-suggestion-icon">🤝</div>
+        <div class="sg-suggestion-body">
+          <div class="sg-suggestion-title">Spielgemeinschaft erkannt</div>
+          <div class="sg-suggestion-text">Dieser Verein spielt in einer Spielgemeinschaft. Möchten Sie die Partnervereine hinzufügen, um alle Spiele und Spielstätten zu sehen?</div>
+          <div class="sg-suggestion-clubs">
+            <div class="sg-suggestion-club">
+              <img class="sg-club-logo" src="https://www.fussball.de/export.media/-/action/getLogo/format/7/id/00ES8GNAVO00000QVV0AG08LVUPGND5I" alt="" loading="lazy">
+              <span class="sg-club-name">SV Hochberg</span>
+              <span class="sg-club-loc">88348 Bad Saulgau</span>
+              <button class="btn btn-sm sg-add-btn" type="button" data-club-id="00ES8GNAVO00000QVV0AG08LVUPGND5I">Hinzufügen</button>
+            </div>
+          </div>
+        </div>
+        <button class="sg-dismiss-btn" type="button" aria-label="Schließen">×</button>
+      </div>
+      <details id="team-overview" class="team-overview">
+        <summary><span id="team-overview-summary">▸ 7 Mannschaften</span></summary>
+        <div id="team-overview-list" class="team-overview-list">
+          <div class="team-overview-table team-overview-table--head"><span>Team</span><span>Spielklasse</span><span></span></div>
+          <div class="team-overview-table"><span class="team-overview-name">SGM Hochberg/Hochdorf</span><span class="team-overview-comp">Herren | Kreisliga A; Kreisliga</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
+          <div class="team-overview-table"><span class="team-overview-name">VfB Neckarrems 1913 e.V.</span><span class="team-overview-comp">Herren | Kreisliga A; Kreisliga</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
+          <div class="team-overview-table"><span class="team-overview-name">SGM SKV Hochberg/SGV Hochdorf/VfB Neckarrems</span><span class="team-overview-comp">A-Junioren | Bezirksfreundschaftsspiele</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
+          <div class="team-overview-table"><span class="team-overview-name">SGM VfB Neckarrems/SKV Hochberg/SGV Hochdorf I</span><span class="team-overview-comp">D-Junioren | Kreisleistungsstaffel</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
+          <div class="team-overview-table"><span class="team-overview-name">SGM VfB Neckarrems/SKV Hochberg/SGV Hochdorf II</span><span class="team-overview-comp">D-Junioren | Kreisstaffel</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
+          <div class="team-overview-table"><span class="team-overview-name">SGM SKV Hochberg/SGV Hochdorf I</span><span class="team-overview-comp">E-Junioren | Kreisstaffel</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
+          <div class="team-overview-table"><span class="team-overview-name">SGM SKV Hochberg/SGV Hochdorf II</span><span class="team-overview-comp">E-Junioren | Kreisstaffel</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
+        </div>
       </details>
+      <!-- public inline submit form removed; use modal +Training in cards / team rows -->
+
+      <!-- Modal is rendered at document root to avoid clipping and ensure correct overlay behavior -->
     </section>
 
     <!-- Section 2: Spielstätten -->
@@ -120,6 +192,43 @@
       </div>
     </section>
   </main>
+
+  <!-- Modal for adding training (used by +Training buttons) -->
+  <div id="training-modal" class="game-modal-overlay hidden" role="dialog" aria-hidden="true">
+    <div class="game-modal" role="document" aria-label="Trainingsplan ergaenzen">
+      <div class="game-modal-header" style="background:var(--primary);">
+        <div class="game-modal-category">Trainingsplan ergaenzen</div>
+        <button id="training-modal-close" class="game-modal-close" aria-label="Schließen">×</button>
+      </div>
+      <div class="game-modal-body">
+        <div class="editor-field">
+          <label for="training-modal-team">Mannschaft</label>
+          <select id="training-modal-team"></select>
+        </div>
+        <div class="editor-field">
+          <label for="training-modal-age">Altersklasse</label>
+          <input id="training-modal-age" type="text" placeholder="z.B. A-Junioren, Herren" />
+        </div>
+        <div class="editor-field">
+          <label for="training-modal-competition">Spielklasse (optional)</label>
+          <input id="training-modal-competition" type="text" placeholder="z.B. Kreisoberliga" />
+        </div>
+        <div class="editor-field">
+          <label for="training-modal-url">Link (optional)</label>
+          <input id="training-modal-url" type="text" placeholder="https://..." />
+        </div>
+        <div class="editor-field">
+          <label for="training-modal-text">Freitext (optional)</label>
+          <textarea id="training-modal-text" rows="6" placeholder="z.B. Montag 17:30-19:00 Kunstrasen, Mittwoch 18:00-19:30 Stadion ..."></textarea>
+        </div>
+        <div class="editor-actions">
+          <button id="training-modal-submit" class="btn btn-primary">Senden</button>
+          <button id="training-modal-cancel" class="btn btn-secondary">Abbrechen</button>
+        </div>
+        <div id="training-modal-msg" class="editor-status" style="display:none;margin-top:0.6rem"></div>
+      </div>
+    </div>
+  </div>
 
   <footer>
     <p>
