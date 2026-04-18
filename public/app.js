@@ -55,6 +55,8 @@ const COOKIE_RECENT       = 'pb_recent';
 const COOKIE_VENUES       = 'pb_venues';
 const COOKIE_VIEW         = 'pb_view';
 const COOKIE_EXTRA_CLUBS  = 'pb_extra_clubs';
+const SAVED_CONFIGS_KEY   = 'pb_saved_configs_v1';
+const URL_CONFIG_PARAM    = 'config';
 
 const VENUE_COLORS = [
   '#1565c0', '#6a1b9a', '#e65100', '#00695c',
@@ -97,6 +99,8 @@ const state = {
   view: 'week',
   loadedFrom: '',
   loadedTo: '',
+  activeConfigId: '',
+  compactClubSelection: false,
 };
 
 const $ = id => document.getElementById(id);
@@ -755,6 +759,33 @@ function updateSectionVisibility() {
   showEl($('section-kalender'), hasClub);
 }
 
+function renderCompactClubSelection() {
+  const compactEl = $('selected-club-compact');
+  const logosEl = $('selected-club-compact-logos');
+  const dialogEl = $('club-selection-dialog');
+  if (!compactEl || !logosEl || !dialogEl) return;
+  const allClubs = getAllClubs();
+  const showCompact = !!(state.compactClubSelection && allClubs.length > 0);
+  if (!showCompact) {
+    showEl(compactEl, false);
+    showEl(dialogEl, true);
+    return;
+  }
+  logosEl.innerHTML = allClubs.map(club => (
+    club.logoUrl
+      ? '<img class="selected-club-compact-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || club.id) + '" title="' + escapeHtml(club.name || club.id) + '" loading="lazy">'
+      : '<span class="selected-club-compact-fallback" title="' + escapeHtml(club.name || club.id) + '">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>'
+  )).join('');
+  showEl(compactEl, true);
+  showEl(dialogEl, false);
+}
+
+function jumpToCalendar() {
+  const calendarSection = $('section-kalender');
+  if (!calendarSection) return;
+  calendarSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 // ===================== Cookie Persistence =====================
 
 function loadFromCookies() {
@@ -793,6 +824,114 @@ function saveVenuesCookie() {
   } else {
     setCookie(COOKIE_VENUES, state.selectedVenueIds);
   }
+}
+
+// ===================== Saved Club Configurations =====================
+
+function readSavedConfigs() {
+  try {
+    const raw = localStorage.getItem(SAVED_CONFIGS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function writeSavedConfigs(configs) {
+  try {
+    localStorage.setItem(SAVED_CONFIGS_KEY, JSON.stringify(configs || {}));
+  } catch (_) {}
+}
+
+function sanitizeConfigId(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+}
+
+function generateConfigId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < 6; i += 1) out += chars.charAt(Math.floor(Math.random() * chars.length));
+  return out;
+}
+
+function updateUrlConfigParam(configId) {
+  const url = new URL(window.location.href);
+  if (configId) url.searchParams.set(URL_CONFIG_PARAM, configId);
+  else url.searchParams.delete(URL_CONFIG_PARAM);
+  window.history.replaceState({}, '', url.toString());
+}
+
+function showConfigStatus(message, isError = false) {
+  const el = $('club-config-status');
+  if (!el) return;
+  el.textContent = message || '';
+  el.classList.toggle('error-msg', !!(message && isError));
+  showEl(el, !!message);
+}
+
+function applyClubConfig(configId, config, compactMode = false) {
+  if (!config || !config.club || !config.club.id) return false;
+  state.club = config.club;
+  state.additionalClubs = Array.isArray(config.additionalClubs) ? config.additionalClubs : [];
+  state.activeConfigId = configId || '';
+  state.compactClubSelection = !!compactMode;
+  state.games = [];
+  state.venues = [];
+  state.venueShortNames = {};
+  state.loadedFrom = '';
+  state.loadedTo = '';
+  state.selectedVenueIds = null;
+  saveClubCookie();
+  saveAdditionalClubsCookie();
+  saveVenuesCookie();
+  renderSelectedClub();
+  renderRecentClubs();
+  updateSectionVisibility();
+  renderVenueCheckboxes();
+  setTeamOverviewLoading();
+  hideSGSuggestion();
+  renderCompactClubSelection();
+  return true;
+}
+
+function loadConfigById(configId, compactMode = false) {
+  const cleanId = sanitizeConfigId(configId);
+  if (!cleanId) return false;
+  const configs = readSavedConfigs();
+  const config = configs[cleanId];
+  if (!config) return false;
+  const applied = applyClubConfig(cleanId, config, compactMode);
+  if (!applied) return false;
+  const input = $('club-config-id-input');
+  if (input) input.value = cleanId;
+  updateUrlConfigParam(cleanId);
+  return true;
+}
+
+function saveCurrentConfig() {
+  const allClubs = getAllClubs();
+  if (!allClubs.length) {
+    showConfigStatus('Bitte zuerst mindestens einen Verein auswählen.', true);
+    return;
+  }
+  const input = $('club-config-id-input');
+  let configId = sanitizeConfigId(input ? input.value : '');
+  const configs = readSavedConfigs();
+  if (!configId) {
+    do { configId = generateConfigId(); } while (configs[configId]);
+  }
+  configs[configId] = {
+    club: state.club,
+    additionalClubs: state.additionalClubs,
+    updatedAt: new Date().toISOString(),
+  };
+  writeSavedConfigs(configs);
+  state.activeConfigId = configId;
+  updateUrlConfigParam(configId);
+  if (input) input.value = configId;
+  showConfigStatus('Konfiguration gespeichert: ' + configId);
 }
 
 // ===================== Recent Clubs =====================
@@ -858,6 +997,8 @@ function renderRecentClubs() {
 function selectClub(club) {
   state.club = club;
   state.additionalClubs = [];
+  state.activeConfigId = '';
+  state.compactClubSelection = false;
   state.games = [];
   state.venues = [];
   state.venueShortNames = {};
@@ -868,7 +1009,10 @@ function selectClub(club) {
   saveAdditionalClubsCookie();
   saveRecentClub(club);
   saveVenuesCookie();
+  updateUrlConfigParam('');
+  showConfigStatus('');
   renderSelectedClub();
+  renderCompactClubSelection();
   renderRecentClubs();
   updateSectionVisibility();
   renderVenueCheckboxes();
@@ -931,6 +1075,8 @@ function renderSelectedClub() {
 function clearClub() {
   state.club = null;
   state.additionalClubs = [];
+  state.activeConfigId = '';
+  state.compactClubSelection = false;
   state.games = [];
   state.venues = [];
   state.venueShortNames = {};
@@ -940,8 +1086,11 @@ function clearClub() {
   saveClubCookie();
   saveAdditionalClubsCookie();
   saveVenuesCookie();
+  updateUrlConfigParam('');
+  showConfigStatus('');
   sessionStorage.removeItem(SESSION_KEY);
   renderSelectedClub();
+  renderCompactClubSelection();
   renderVenueCheckboxes();
   updateSectionVisibility();
   hideSGSuggestion();
@@ -1420,8 +1569,13 @@ async function addAdditionalClub(club) {
     logoUrl: club.logoUrl || '',
     url: club.url || '',
   });
+  state.activeConfigId = '';
+  state.compactClubSelection = false;
+  updateUrlConfigParam('');
   saveAdditionalClubsCookie();
+  showConfigStatus('');
   renderSelectedClub();
+  renderCompactClubSelection();
   hideSGSuggestion();
   const dateFrom = state.loadedFrom || getDefaultDateRange().dateFrom;
   const dateTo   = state.loadedTo   || getDefaultDateRange().dateTo;
@@ -1443,8 +1597,13 @@ async function removeSelectedClub(clubId) {
   } else {
     state.additionalClubs = state.additionalClubs.filter(c => c.id !== clubId);
   }
+  state.activeConfigId = '';
+  state.compactClubSelection = false;
+  updateUrlConfigParam('');
   saveAdditionalClubsCookie();
+  showConfigStatus('');
   renderSelectedClub();
+  renderCompactClubSelection();
   const dateFrom = state.loadedFrom || getDefaultDateRange().dateFrom;
   const dateTo   = state.loadedTo   || getDefaultDateRange().dateTo;
   await fetchGames(dateFrom, dateTo);
@@ -1871,6 +2030,45 @@ function goToDate(dateStr) {
 // ===================== Event Binding =====================
 
 function bindEvents() {
+  const saveConfigBtn = $('save-club-config-btn');
+  if (saveConfigBtn) saveConfigBtn.addEventListener('click', saveCurrentConfig);
+  const loadConfigBtn = $('load-club-config-btn');
+  if (loadConfigBtn) {
+    loadConfigBtn.addEventListener('click', async () => {
+      const input = $('club-config-id-input');
+      const configId = sanitizeConfigId(input ? input.value : '');
+      if (!configId) {
+        showConfigStatus('Bitte eine Konfig-ID eingeben.', true);
+        return;
+      }
+      showConfigStatus('');
+      const ok = loadConfigById(configId, true);
+      if (!ok) {
+        showConfigStatus('Keine Konfiguration mit ID "' + configId + '" gefunden.', true);
+        return;
+      }
+      await autoLoadGames();
+      jumpToCalendar();
+      showConfigStatus('Konfiguration geladen: ' + configId);
+    });
+  }
+  const configInput = $('club-config-id-input');
+  if (configInput && loadConfigBtn) {
+    configInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        loadConfigBtn.click();
+      }
+    });
+  }
+  const changeBtn = $('selected-club-change-btn');
+  if (changeBtn) {
+    changeBtn.addEventListener('click', () => {
+      state.compactClubSelection = false;
+      renderCompactClubSelection();
+    });
+  }
+
   $('club-search-btn').addEventListener('click', () => {
     const query = $('club-search-input').value.trim();
     if (query.length < 2) {
@@ -1927,7 +2125,16 @@ async function init() {
   state.currentWeekStart = getMonday(today);
   state.currentMonth     = new Date(today.getFullYear(), today.getMonth(), 1);
 
+  const requestedConfigId = sanitizeConfigId(new URLSearchParams(window.location.search).get(URL_CONFIG_PARAM) || '');
+  if (requestedConfigId) {
+    if (!loadConfigById(requestedConfigId, true)) {
+      showConfigStatus('Konfiguration "' + requestedConfigId + '" wurde nicht gefunden.', true);
+      updateUrlConfigParam('');
+    }
+  }
+
   renderSelectedClub();
+  renderCompactClubSelection();
   renderRecentClubs();
   updateSectionVisibility();
   bindEvents();
@@ -1937,6 +2144,7 @@ async function init() {
 
   if (state.club && state.club.id) {
     await autoLoadGames();
+    if (requestedConfigId && state.compactClubSelection) jumpToCalendar();
   } else {
     renderVenueCheckboxes();
     renderTeamOverview();

@@ -44,18 +44,23 @@
           <span class="tooltip-content">Vereinslink von fussball.de einfügen oder Vereinsnamen eingeben. Die Auswahl wird im Browser gespeichert (Cookie).</span>
         </span>
       </h2>
-      <div id="recent-clubs" class="recent-clubs hidden"></div>
-      <div class="input-row">
-        <input
-          type="text"
-          id="club-search-input"
-          placeholder="Vereinsname oder fussball.de Verein-Link…"
-          autocomplete="off"
-        />
-        <button id="club-search-btn" class="btn btn-primary">Suchen</button>
+      <div id="selected-club-compact" class="selected-club-compact hidden">
+        <div id="selected-club-compact-logos" class="selected-club-compact-logos"></div>
+        <button id="selected-club-change-btn" class="btn btn-sm btn-secondary" type="button">ändern</button>
       </div>
-      <div id="club-search-results" class="search-results hidden"></div>
-      <div id="selected-club-info" class="selected-club-info">
+      <div id="club-selection-dialog">
+        <div id="recent-clubs" class="recent-clubs hidden"></div>
+        <div class="input-row">
+          <input
+            type="text"
+            id="club-search-input"
+            placeholder="Vereinsname oder fussball.de Verein-Link…"
+            autocomplete="off"
+          />
+          <button id="club-search-btn" class="btn btn-primary">Suchen</button>
+        </div>
+        <div id="club-search-results" class="search-results hidden"></div>
+        <div id="selected-club-info" class="selected-club-info">
         <div class="selected-club-label">Ausgewählte Vereine</div>
         <div class="selected-club-cards">
           <div class="selected-club-card">
@@ -100,8 +105,8 @@
             </div>
           </div>
         </div>
-      </div>
-      <div id="sg-suggestion" class="sg-suggestion">
+        </div>
+        <div id="sg-suggestion" class="sg-suggestion">
         <div class="sg-suggestion-icon">🤝</div>
         <div class="sg-suggestion-body">
           <div class="sg-suggestion-title">Spielgemeinschaft erkannt</div>
@@ -116,8 +121,8 @@
           </div>
         </div>
         <button class="sg-dismiss-btn" type="button" aria-label="Schließen">×</button>
-      </div>
-      <details id="team-overview" class="team-overview">
+        </div>
+        <details id="team-overview" class="team-overview">
         <summary><span id="team-overview-summary">▸ 7 Mannschaften</span></summary>
         <div id="team-overview-loading" class="loading hidden">
           <span class="spinner"></span> Mannschaften werden geladen…
@@ -132,7 +137,20 @@
           <div class="team-overview-table"><span class="team-overview-name">SGM SKV Hochberg/SGV Hochdorf I</span><span class="team-overview-comp">E-Junioren | Kreisstaffel</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
           <div class="team-overview-table"><span class="team-overview-name">SGM SKV Hochberg/SGV Hochdorf II</span><span class="team-overview-comp">E-Junioren | Kreisstaffel</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
         </div>
-      </details>
+        </details>
+        <div class="config-actions">
+          <button id="save-club-config-btn" class="btn btn-secondary" type="button">Konfiguration speichern</button>
+          <input
+            type="text"
+            id="club-config-id-input"
+            class="config-id-input"
+            placeholder="Konfig-ID"
+            autocomplete="off"
+          />
+          <button id="load-club-config-btn" class="btn btn-secondary" type="button">Konfiguration laden</button>
+        </div>
+        <div id="club-config-status" class="hint current-club hidden"></div>
+      </div>
       <!-- public inline submit form removed; use modal +Training in cards / team rows -->
 
       <!-- Modal is rendered at document root to avoid clipping and ensure correct overlay behavior -->

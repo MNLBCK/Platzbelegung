@@ -607,6 +607,64 @@ main {
   margin-top: 0.8rem;
 }
 
+.selected-club-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f7fbf8;
+  margin-top: 0.2rem;
+}
+
+.selected-club-compact-logos {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.selected-club-compact-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: contain;
+  background: var(--white);
+  border: 1px solid var(--border);
+}
+
+.selected-club-compact-fallback {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--primary-l);
+  color: var(--primary-d);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+}
+
+.config-actions {
+  margin-top: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.config-id-input {
+  min-width: 150px;
+  max-width: 190px;
+  padding: 0.52rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
 .selected-club-label {
   font-size: 0.78rem;
   color: var(--text-light);
