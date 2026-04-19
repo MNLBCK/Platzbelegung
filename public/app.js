@@ -99,7 +99,6 @@ const state = {
   view: 'week',
   loadedFrom: '',
   loadedTo: '',
-  activeConfigId: '',
   compactClubSelection: false,
 };
 
@@ -868,6 +867,7 @@ function showConfigStatus(message, isError = false) {
   if (!el) return;
   el.textContent = message || '';
   el.classList.toggle('error-msg', !!(message && isError));
+  el.classList.toggle('current-club', !(message && isError));
   showEl(el, !!message);
 }
 
@@ -875,7 +875,6 @@ function applyClubConfig(configId, config, compactMode = false) {
   if (!config || !config.club || !config.club.id) return false;
   state.club = config.club;
   state.additionalClubs = Array.isArray(config.additionalClubs) ? config.additionalClubs : [];
-  state.activeConfigId = configId || '';
   state.compactClubSelection = !!compactMode;
   state.games = [];
   state.venues = [];
@@ -928,7 +927,6 @@ function saveCurrentConfig() {
     updatedAt: new Date().toISOString(),
   };
   writeSavedConfigs(configs);
-  state.activeConfigId = configId;
   updateUrlConfigParam(configId);
   if (input) input.value = configId;
   showConfigStatus('Konfiguration gespeichert: ' + configId);
@@ -997,7 +995,6 @@ function renderRecentClubs() {
 function selectClub(club) {
   state.club = club;
   state.additionalClubs = [];
-  state.activeConfigId = '';
   state.compactClubSelection = false;
   state.games = [];
   state.venues = [];
@@ -1075,7 +1072,6 @@ function renderSelectedClub() {
 function clearClub() {
   state.club = null;
   state.additionalClubs = [];
-  state.activeConfigId = '';
   state.compactClubSelection = false;
   state.games = [];
   state.venues = [];
@@ -1569,7 +1565,6 @@ async function addAdditionalClub(club) {
     logoUrl: club.logoUrl || '',
     url: club.url || '',
   });
-  state.activeConfigId = '';
   state.compactClubSelection = false;
   updateUrlConfigParam('');
   saveAdditionalClubsCookie();
@@ -1597,7 +1592,6 @@ async function removeSelectedClub(clubId) {
   } else {
     state.additionalClubs = state.additionalClubs.filter(c => c.id !== clubId);
   }
-  state.activeConfigId = '';
   state.compactClubSelection = false;
   updateUrlConfigParam('');
   saveAdditionalClubsCookie();
