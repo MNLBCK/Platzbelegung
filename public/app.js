@@ -576,7 +576,7 @@ function getOpponent(game) {
       if (htLow.includes(clubName)) return game.guestTeam || '';
       if (gtLow.includes(clubName)) return game.homeTeam  || '';
     }
-    const key = clubName.split(/\s+/).find(w => w.length > 2);
+    const key = clubName.split(/\s+/).find(w => w.length > 3);
     if (key) {
       const wordRe = new RegExp('(?:^|\\s)' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\s|$)');
       if (wordRe.test(htLow)) return game.guestTeam || '';
@@ -599,7 +599,7 @@ function getOpponentLogoUrl(game) {
       if (htLow.includes(clubName)) return game.guestLogoUrl || '';
       if (gtLow.includes(clubName)) return game.homeLogoUrl  || '';
     }
-    const key = clubName.split(/\s+/).find(w => w.length > 2);
+    const key = clubName.split(/\s+/).find(w => w.length > 3);
     if (key) {
       const wordRe = new RegExp('(?:^|\\s)' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\s|$)');
       if (wordRe.test(htLow)) return game.guestLogoUrl || '';
