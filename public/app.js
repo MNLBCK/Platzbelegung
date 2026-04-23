@@ -1679,9 +1679,12 @@ function reconcileVenueSelection() {
 function renderVenueCheckboxes() {
   const loadingEl = $('venues-loading');
   const emptyEl   = $('venues-empty');
-  const cbEl      = $('venues-checkboxes');
+  const monthCbEl = $('venues-checkboxes');
+  const weekCbEl  = $('week-venues-checkboxes');
   const errEl     = $('venues-error');
-  const wrapEl    = $('venues-selection-inline');
+  const monthWrapEl = $('venues-selection-inline');
+  const isWeekView = state.view === 'week';
+  const cbEl = isWeekView ? weekCbEl : monthCbEl;
 
   showEl(loadingEl, false);
   showEl(errEl, false);
@@ -1689,34 +1692,36 @@ function renderVenueCheckboxes() {
   if (!state.club || !state.club.id) {
     emptyEl.textContent = 'Bitte zuerst einen Verein auswählen.';
     showEl(emptyEl, true);
-    showEl(wrapEl, false);
+    showEl(monthWrapEl, false);
+    if (weekCbEl) weekCbEl.innerHTML = '';
     return;
   }
 
   if (!state.venues.length) {
     emptyEl.textContent = 'Keine Spielstätten gefunden.';
     showEl(emptyEl, true);
-    showEl(wrapEl, false);
+    showEl(monthWrapEl, false);
+    if (weekCbEl) weekCbEl.innerHTML = '';
     return;
   }
 
   showEl(emptyEl, false);
-  showEl(wrapEl, true);
-  wrapEl.classList.toggle('venues-selection-inline--compact', state.view === 'month');
+  showEl(monthWrapEl, !isWeekView);
+  monthWrapEl.classList.toggle('venues-selection-inline--compact', !isWeekView);
+  if (weekCbEl) showEl(weekCbEl, isWeekView);
+  if (!cbEl) return;
 
   const MAPS_BASE = 'https://www.google.com/maps/search/?api=1&query=';
 
   cbEl.innerHTML = state.venues.map((venue, index) => {
     const color   = VENUE_COLORS[index % VENUE_COLORS.length];
     const checked = isVenueSelected(venue.id) ? 'checked' : '';
-    const short   = state.venueShortNames[venue.id] || deriveShortVenueName(venue.name);
     const mapsUrl = MAPS_BASE + encodeURIComponent(venue.name);
     return (
       '<label class="venue-checkbox-item">' +
       '<input type="checkbox" data-venue-id="' + escapeHtml(venue.id) + '" ' + checked + ' />' +
       '<span class="venue-color-dot" style="background:' + color + '"></span>' +
-      '<span class="venue-short-name">' + escapeHtml(short) + '</span>' +
-      '<span class="venue-full-name" title="' + escapeHtml(venue.name) + '">' + escapeHtml(venue.name) + '</span>' +
+      '<span class="venue-name" title="' + escapeHtml(venue.name) + '">' + escapeHtml(venue.name) + '</span>' +
       '<a class="venue-map-icon" href="' + escapeHtml(mapsUrl) + '" target="_blank" rel="noopener noreferrer" title="In Google Maps öffnen" onclick="event.stopPropagation()">&#x1F4CD;</a>' +
       '</label>'
     );
@@ -1770,7 +1775,7 @@ function renderWeekView() {
   const weekStart = state.currentWeekStart;
   const days      = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today     = new Date();
-  const weekEnd   = days[6];
+  const weekEndExclusive = addDays(days[6], 1);
 
   // Label shows "KW XX · YYYY"
   $('current-period-label').textContent =
@@ -1801,7 +1806,7 @@ function renderWeekView() {
     const vid = deriveVenueId(game);
     if (!visibleVenues.find(v => v.id === vid)) return false;
     const d = new Date(game.startDate);
-    return d >= weekStart && d <= weekEnd;
+    return d >= weekStart && d < weekEndExclusive;
   });
   showEl($('no-games-msg'), !hasWeekGames);
 
