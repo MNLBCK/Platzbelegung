@@ -4,29 +4,37 @@ Durchsucht online Quellen (vorrangig fussball.de) nach Spielen auf einem oder me
 
 ## Datenquellen
 
-Die Anwendung nutzt primär die **club matchplan API** (`ajax.club.matchplan`) von fussball.de, da diese stabiler und strukturierter ist als das HTML-Parsing von Sportstätten-Seiten.
+Die Anwendung nutzt die **club matchplan API** (`ajax.club.matchplan`) von fussball.de.
+Das gesamte HTML-Parsing dieser API erfolgt in PHP – PHP ist die **Single Source of Truth**
+für alle Normalisierungs- und Parsing-Logik.
 
-### Warum nicht mehr Sportstätten-Seiten?
+### PHP als einzige Parsing-Schicht
 
-Die direkten Sportstätten-URLs (`https://www.fussball.de/sportstaette/-/id/...`) zeigen nicht mehr zuverlässig alle Spiele an. Die HTML-Struktur ändert sich häufig und ist nicht für maschinelles Auslesen gedacht. Daher ist dieser Ansatz als **deprecated** markiert.
+Das HTML-Parsing von fussball.de findet ausschließlich in PHP statt:
+
+- **`parse_matchplan.php`** – CLI-Skript; ruft fussball.de ab und parst die Antwort
+- **`backend.php`** – enthält alle Parsing-Funktionen (`parseClubMatchplanHtml`, `parseGermanDate`, …)
+
+Python enthält keine eigene HTML-Parsing-Logik mehr. `platzbelegung scrape` ruft
+`parse_matchplan.php` via Subprocess auf und speichert das resultierende JSON als Snapshot.
 
 ### Club-first Architektur
 
 Der empfohlene Workflow ist:
-1. **Club Matchplan scrapen** → alle Spiele des Vereins über `ajax.club.matchplan`
-2. **Nach Sportstätten filtern** → nur Spiele auf den konfigurierten Plätzen anzeigen
-
-Dies ist robuster und einfacher zu warten, da die API-Struktur stabiler ist als HTML-Parsing.
+1. **Club Matchplan scrapen** → `parse_matchplan.php` ruft `ajax.club.matchplan` ab und parst HTML
+2. **Nach Sportstätten filtern** → Python filtert das JSON-Ergebnis nach konfigurierten Plätzen
 
 ## Architektur
 
-Das Projekt ist in zwei klar getrennte Schichten unterteilt:
-
 ```
-config.yaml               ← zentrale Konfiguration (Verein, Plätze, Saison, …)
+config.yaml               ← zentrale Konfiguration (Verein, Plätze, …)
+│
+├── parse_matchplan.php   ← CLI: fussball.de abrufen + HTML parsen (Single Source of Truth)
+│
+├── backend.php           ← PHP-Web-Server + API-Routen + Parsing-Funktionen
 │
 ├── Python-Paket (src/platzbelegung/)
-│   ├── scraper.py        ← liest Daten direkt von fussball.de
+│   ├── scraper.py        ← ruft parse_matchplan.php via Subprocess auf; kein eigenes HTML-Parsing
 │   ├── storage.py        ← speichert Snapshots als JSON mit Zeitstempel
 │   ├── parser.py         ← wandelt Rohdaten in Belegungsslots um
 │   ├── render_html.py    ← erzeugt offline-fähige HTML-Datei
@@ -35,25 +43,26 @@ config.yaml               ← zentrale Konfiguration (Verein, Plätze, Saison, �
 │       └── occupancy.html.j2   ← gemeinsame Jinja2-Vorlage
 │
 └── Web-Server (PHP)
-    └── liest data/latest.json  ← von Python erzeugt
-        ├── GET /api/snapshot   ← vollständiger Snapshot
-        ├── GET /api/games      ← Spiele gefiltert nach Sportstätte
-        ├── GET /api/search     ← Sportstätten-Suche auf fussball.de
-        └── GET /api/demo       ← Demo-Daten ohne Snapshot
+    └── liest data/latest.json  ← von Python (via PHP-Parser) erzeugt
+        ├── GET /api/snapshot        ← vollständiger Snapshot
+        ├── GET /api/games           ← Spiele gefiltert nach Sportstätte
+        ├── GET /api/club-matchplan  ← Live-Scraping via PHP-Parser
+        ├── GET /api/search          ← Sportstätten-/Vereinssuche auf fussball.de
+        └── GET /api/demo            ← Demo-Daten ohne Snapshot
 ```
 
 **Datenfluss:**
-1. `platzbelegung scrape` → scrapt club matchplan (ajax.club.matchplan) → filtert nach Sportstätten → speichert `data/latest.json` + `data/snapshots/*.json`
+1. `platzbelegung scrape` → ruft `parse_matchplan.php` auf → PHP parsed fussball.de-HTML → filtert nach Sportstätten → speichert `data/latest.json`
 2. `platzbelegung html` → liest `data/latest.json` → generiert `data/latest.html`
 3. PHP-Server → liest `data/latest.json` → liefert dynamische Web-UI
 
 **Scraping-Strategie:**
-- **Primär:** Club matchplan API (`scraper.scrape_club_matchplan()`) – stabil, strukturiert
+- **Einziger Parser:** `parse_matchplan.php` (PHP) – keine doppelte Parsing-Logik mehr
 
 ## Voraussetzungen
 
 - Python 3.10 oder neuer
-- PHP 8.1 oder neuer (nur für den Web-Server)
+- PHP 8.1 oder neuer (für Scraping via `parse_matchplan.php` **und** für den Web-Server)
 
 ## Python-Installation
 
@@ -292,7 +301,8 @@ Platzbelegung/
 ├── README.md
 ├── pyproject.toml                     # Python-Paketdefinition
 ├── package.json                       # npm scripts (startet PHP-Server)
-├── backend.php                         # PHP-Web-Server + API-Routen
+├── backend.php                        # PHP-Web-Server + API-Routen + Parsing-Funktionen
+├── parse_matchplan.php                # CLI: fussball.de abrufen + HTML parsen (Single Source of Truth)
 ├── public/                            # Statisches Frontend (Web-UI)
 │   ├── index.html
 │   ├── app.js
@@ -301,7 +311,7 @@ Platzbelegung/
 │   └── platzbelegung/
 │       ├── __init__.py
 │       ├── config.py                  # Lädt config.yaml
-│       ├── scraper.py                 # Direkter fussball.de HTML-Scraper
+│       ├── scraper.py                 # Ruft parse_matchplan.php auf; kein eigenes HTML-Parsing
 │       ├── storage.py                 # JSON-Snapshot-Verwaltung
 │       ├── models.py                  # Datenmodelle (ScrapedGame, OccupancySlot, …)
 │       ├── parser.py                  # Spiele → Belegungsslots

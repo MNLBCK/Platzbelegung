@@ -777,6 +777,13 @@ function getJsonBody(): array
     return is_array($data) ? $data : [];
 }
 
+// HTTP-Routing nur im Web-Context ausführen; CLI-Skripte (z.B. parse_matchplan.php)
+// können backend.php sicher per require einbinden, ohne dass Routing ausgelöst wird.
+// Dazu muss die einbindende Datei PLATZBELEGUNG_CLI_PARSE vor dem require definieren.
+if (defined('PLATZBELEGUNG_CLI_PARSE')) {
+    return;
+}
+
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 parse_str(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_QUERY) ?: '', $query);
