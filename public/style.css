@@ -800,15 +800,8 @@ main {
   font-size: 0.82rem;
   color: var(--text-light);
 }
-.selected-club-link {
-  font-size: 0.75rem;
-}
-.selected-club-link a {
-  color: var(--primary);
+.selected-club-link-btn {
   text-decoration: none;
-}
-.selected-club-link a:hover {
-  text-decoration: underline;
 }
 .selected-club-card {
   position: relative;
@@ -1045,13 +1038,8 @@ main {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.venue-short-name {
-  font-weight: 700;
-  font-size: 0.88rem;
-  flex-shrink: 0;
-}
-.venue-full-name {
-  font-size: 0.78rem;
+.venue-name {
+  font-size: 0.84rem;
   color: var(--text-light);
   flex: 1;
   min-width: 0;
@@ -1175,11 +1163,16 @@ main {
   font-size: 0.72rem;
   color: var(--text-light);
 }
-.venues-selection-inline--compact .venue-full-name {
-  display: none;
-}
 .venues-selection-inline--compact .venue-checkbox-item {
-  padding: 0.22rem 0.4rem;
+  padding: 0.2rem 0.35rem;
+}
+.venues-selection-inline--compact .venues-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.22rem 0.45rem;
+}
+.venues-selection-inline--compact .venue-name {
+  font-size: 0.8rem;
 }
 .nav-controls {
   display: flex;
@@ -1205,7 +1198,6 @@ main {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-
 /* Week Grid */
 .week-grid {
   display: grid;
@@ -1258,6 +1250,16 @@ main {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+.wg-venue-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+.wg-venue-checkbox {
+  width: 0.95rem;
+  height: 0.95rem;
+  accent-color: var(--primary);
+  cursor: pointer;
 }
 .wg-venue-text {
   overflow: hidden;

@@ -1109,10 +1109,10 @@ function renderSelectedClub() {
           '<div class="selected-club-details">' +
             '<div class="selected-club-name">' + escapeHtml(c.name) + '</div>' +
             (c.location ? '<div class="selected-club-location">' + escapeHtml(c.location) + '</div>' : '') +
-            (clubUrl ? '<div class="selected-club-link"><a href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">Verein auf fussball.de &#8599;</a></div>' : '') +
           '</div>' +
         '</div>' +
         '<div class="selected-club-actions">' +
+          (clubUrl ? '<a class="btn btn-sm btn-secondary selected-club-link-btn" href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">fussball.de &#8599;</a>' : '') +
           '<button class="btn btn-sm add-training-club-card-btn" data-club-id="' + escapeHtml(c.id) + '">+ Training</button>' +
         '</div>' +
         removeBtn +
@@ -1676,12 +1676,23 @@ function reconcileVenueSelection() {
   saveVenuesCookie();
 }
 
+function applyVenueSelection(checkedIds) {
+  const validIds = new Set(state.venues.map(v => v.id));
+  const filtered = Array.from(new Set((checkedIds || []).filter(id => validIds.has(id))));
+  state.selectedVenueIds =
+    filtered.length === 0 || filtered.length === state.venues.length ? null : filtered;
+  saveVenuesCookie();
+  renderCurrentView();
+}
+
 function renderVenueCheckboxes() {
   const loadingEl = $('venues-loading');
   const emptyEl   = $('venues-empty');
-  const cbEl      = $('venues-checkboxes');
+  const monthCbEl = $('venues-checkboxes');
   const errEl     = $('venues-error');
-  const wrapEl    = $('venues-selection-inline');
+  const monthWrapEl = $('venues-selection-inline');
+  const isWeekView = state.view === 'week';
+  const cbEl = monthCbEl;
 
   showEl(loadingEl, false);
   showEl(errEl, false);
@@ -1689,34 +1700,33 @@ function renderVenueCheckboxes() {
   if (!state.club || !state.club.id) {
     emptyEl.textContent = 'Bitte zuerst einen Verein auswählen.';
     showEl(emptyEl, true);
-    showEl(wrapEl, false);
+    showEl(monthWrapEl, false);
     return;
   }
 
   if (!state.venues.length) {
     emptyEl.textContent = 'Keine Spielstätten gefunden.';
     showEl(emptyEl, true);
-    showEl(wrapEl, false);
+    showEl(monthWrapEl, false);
     return;
   }
 
   showEl(emptyEl, false);
-  showEl(wrapEl, true);
-  wrapEl.classList.toggle('venues-selection-inline--compact', state.view === 'month');
+  showEl(monthWrapEl, !isWeekView);
+  monthWrapEl.classList.toggle('venues-selection-inline--compact', !isWeekView);
+  if (!cbEl || isWeekView) return;
 
   const MAPS_BASE = 'https://www.google.com/maps/search/?api=1&query=';
 
   cbEl.innerHTML = state.venues.map((venue, index) => {
     const color   = VENUE_COLORS[index % VENUE_COLORS.length];
     const checked = isVenueSelected(venue.id) ? 'checked' : '';
-    const short   = state.venueShortNames[venue.id] || deriveShortVenueName(venue.name);
     const mapsUrl = MAPS_BASE + encodeURIComponent(venue.name);
     return (
       '<label class="venue-checkbox-item">' +
       '<input type="checkbox" data-venue-id="' + escapeHtml(venue.id) + '" ' + checked + ' />' +
       '<span class="venue-color-dot" style="background:' + color + '"></span>' +
-      '<span class="venue-short-name">' + escapeHtml(short) + '</span>' +
-      '<span class="venue-full-name" title="' + escapeHtml(venue.name) + '">' + escapeHtml(venue.name) + '</span>' +
+      '<span class="venue-name" title="' + escapeHtml(venue.name) + '">' + escapeHtml(venue.name) + '</span>' +
       '<a class="venue-map-icon" href="' + escapeHtml(mapsUrl) + '" target="_blank" rel="noopener noreferrer" title="In Google Maps öffnen" onclick="event.stopPropagation()">&#x1F4CD;</a>' +
       '</label>'
     );
@@ -1730,9 +1740,7 @@ function renderVenueCheckboxes() {
     cb.addEventListener('change', () => {
       const allBoxes = cbEl.querySelectorAll('input[type="checkbox"]');
       const checked  = Array.from(allBoxes).filter(b => b.checked).map(b => b.dataset.venueId);
-      state.selectedVenueIds = checked.length === state.venues.length ? null : checked;
-      saveVenuesCookie();
-      renderCurrentView();
+      applyVenueSelection(checked);
     });
   });
 }
@@ -1770,7 +1778,7 @@ function renderWeekView() {
   const weekStart = state.currentWeekStart;
   const days      = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today     = new Date();
-  const weekEnd   = days[6];
+  const weekEndExclusive = addDays(days[6], 1);
 
   // Label shows "KW XX · YYYY"
   $('current-period-label').textContent =
@@ -1801,7 +1809,7 @@ function renderWeekView() {
     const vid = deriveVenueId(game);
     if (!visibleVenues.find(v => v.id === vid)) return false;
     const d = new Date(game.startDate);
-    return d >= weekStart && d <= weekEnd;
+    return d >= weekStart && d < weekEndExclusive;
   });
   showEl($('no-games-msg'), !hasWeekGames);
 
@@ -1815,8 +1823,26 @@ function renderWeekView() {
     const rowHeader = document.createElement('div');
     rowHeader.className = 'wg-venue-row-header' + (index % 2 === 0 ? ' wg-row-even' : '');
     rowHeader.innerHTML =
+      '<label class="wg-venue-toggle" title="Spielstätte ein-/ausblenden">' +
+      '<input type="checkbox" class="wg-venue-checkbox" data-venue-id="' + escapeHtml(venue.id) + '"' + (isVenueSelected(venue.id) ? ' checked' : '') + '>' +
+      '</label>' +
       '<span class="dot" style="background:' + vColor + '"></span>' +
       '<span class="wg-venue-text" title="' + escapeHtml(venue.name) + '">' + escapeHtml(venue.name) + '</span>';
+    const venueToggle = rowHeader.querySelector('.wg-venue-checkbox');
+    if (venueToggle) {
+      venueToggle.addEventListener('change', (event) => {
+        const target = event.currentTarget;
+        const venueId = target && target.dataset ? target.dataset.venueId : '';
+        if (!venueId) return;
+        const selected = state.selectedVenueIds
+          ? state.selectedVenueIds.slice()
+          : state.venues.map(v => v.id);
+        const nextSelected = target.checked
+          ? selected.concat([venueId])
+          : selected.filter(id => id !== venueId);
+        applyVenueSelection(nextSelected);
+      });
+    }
     grid.appendChild(rowHeader);
 
     days.forEach(day => {

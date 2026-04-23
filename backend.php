@@ -328,13 +328,23 @@ function savePageHits(array $hits): bool
 
 function shouldTrackPageHit(string $uri): bool
 {
-    if (str_starts_with($uri, '/api/admin/')) {
+    $path = parse_url($uri, PHP_URL_PATH) ?: '/';
+    if (str_starts_with($path, '/api/admin/')) {
         return false;
     }
-    if ($uri === '/admin' || $uri === '/admin.html') {
+    if ($path === '/admin' || $path === '/admin.html') {
         return false;
     }
     return true;
+}
+
+function normalizeTrackedPageHit(string $path, array $query): string
+{
+    $configId = trim((string)($query['config'] ?? ''));
+    if ($configId !== '') {
+        return $path . '?config=' . rawurlencode($configId);
+    }
+    return $path;
 }
 
 function recordPageHit(string $uri): void
@@ -778,9 +788,10 @@ function getJsonBody(): array
 }
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-parse_str(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_QUERY) ?: '', $query);
-recordPageHit($uri);
+$requestUri = (string)($_SERVER['REQUEST_URI'] ?? '/');
+$uri = parse_url($requestUri, PHP_URL_PATH) ?: '/';
+parse_str(parse_url($requestUri, PHP_URL_QUERY) ?: '', $query);
+recordPageHit(normalizeTrackedPageHit($uri, $query));
 
 // Public POST endpoint for submitting requests must be handled regardless of GET/HEAD block.
 if ($method === 'POST' && $uri === '/api/requests/submit') {
