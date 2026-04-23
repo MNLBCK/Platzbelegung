@@ -996,31 +996,39 @@ function renderRecentClubs() {
   const clubs = loadRecentClubs();
   const recentConfigs = readRecentConfigs();
   if (!clubs.length && !recentConfigs.length) { showEl(container, false); return; }
+  const recentItems = [];
+  clubs.forEach(club => recentItems.push({ type: 'club', club }));
+  recentConfigs.forEach(entry => recentItems.push({ type: 'config', entry }));
   showEl(container, true);
   container.innerHTML =
     '<div class="recent-clubs-head">' +
       '<div class="recent-clubs-label">Zuletzt verwendet:</div>' +
-      '<button type="button" class="recent-clubs-reset" id="recent-clubs-reset">zurücksetzen</button>' +
+      '<button type="button" class="recent-clubs-reset" id="recent-clubs-reset">Verlauf löschen</button>' +
     '</div>' +
-    (clubs.length ? '<div class="recent-sub-label">Vereine</div><div class="recent-clubs-list">' +
-    clubs.map(club =>
-      '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="' + escapeHtml(club.name) + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
-      '<span class="recent-club-logo-wrap">' +
-      (club.logoUrl
-        ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
-        : '<span class="recent-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>') +
-      '</span>' +
-      '<span class="recent-club-name">' + escapeHtml(club.name) + '</span>' +
-      '</button>'
-    ).join('') + '</div>' : '') +
-    (recentConfigs.length ? '<div class="recent-sub-label">Konfigurationen</div><div class="recent-clubs-list recent-configs-list">' +
-      recentConfigs.map(entry =>
-        '<button class="recent-club-btn recent-config-btn" type="button" data-config-id="' + escapeHtml(entry.id) + '" title="Konfiguration ' + escapeHtml(entry.id) + '">' +
-          '<span class="recent-config-id">' + escapeHtml(entry.id) + '</span>' +
-          '<span class="recent-club-name">' + escapeHtml(entry.label || entry.id) + '</span>' +
-        '</button>'
-      ).join('') +
-      '</div>' : '');
+    '<div class="recent-clubs-list recent-configs-list">' +
+      recentItems.map(item => {
+        if (item.type === 'config') {
+          const entry = item.entry || {};
+          return (
+            '<button class="recent-club-btn recent-config-btn" type="button" data-config-id="' + escapeHtml(entry.id || '') + '" title="Vereinsfilter ' + escapeHtml(entry.id || '') + '">' +
+              '<span class="recent-config-id">' + escapeHtml(entry.id || '') + '</span>' +
+              '<span class="recent-club-name">' + escapeHtml(entry.label || entry.id || '') + '</span>' +
+            '</button>'
+          );
+        }
+        const club = item.club || {};
+        return (
+          '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id || '') + '" title="' + escapeHtml(club.name || '') + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
+            '<span class="recent-club-logo-wrap">' +
+            (club.logoUrl
+              ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || '') + '" loading="lazy">'
+              : '<span class="recent-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>') +
+            '</span>' +
+            '<span class="recent-club-name">' + escapeHtml(club.name || '') + '</span>' +
+          '</button>'
+        );
+      }).join('') +
+    '</div>';
   const resetBtn = $('recent-clubs-reset');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
@@ -2220,11 +2228,25 @@ async function init() {
   state.currentMonth     = new Date(today.getFullYear(), today.getMonth(), 1);
 
   const requestedConfigId = sanitizeConfigId(new URLSearchParams(window.location.search).get(URL_CONFIG_PARAM) || '');
+  let loadedViaClubParam = false;
   if (requestedConfigId) {
     if (!loadConfigById(requestedConfigId, true)) {
       showConfigStatus('Konfiguration "' + requestedConfigId + '" wurde nicht gefunden.', true);
       updateUrlConfigParam('');
     }
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const requestedClubId = String(params.get('clubId') || '').trim();
+  if (!requestedConfigId && requestedClubId && !state.club) {
+    const presetClub = {
+      id: requestedClubId,
+      name: String(params.get('clubName') || requestedClubId).trim(),
+      logoUrl: String(params.get('clubLogoUrl') || '').trim(),
+      location: String(params.get('clubLocation') || '').trim(),
+    };
+    await selectClub(presetClub);
+    loadedViaClubParam = true;
   }
 
   renderSelectedClub();
@@ -2237,7 +2259,9 @@ async function init() {
   $('view-month-btn').classList.toggle('btn-active', state.view === 'month');
 
   if (state.club && state.club.id) {
-    await autoLoadGames();
+    if (!loadedViaClubParam) {
+      await autoLoadGames();
+    }
     if (requestedConfigId && state.compactClubSelection) jumpToCalendar();
   } else {
     renderVenueCheckboxes();

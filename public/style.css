@@ -536,10 +536,7 @@ main {
   flex-wrap: wrap;
 }
 .recent-sub-label {
-  font-size: 0.72rem;
-  color: var(--text-light);
-  margin: 0.2rem 0 0.35rem;
-  font-weight: 600;
+  display: none;
 }
 .recent-clubs-reset {
   border: none;
@@ -715,9 +712,10 @@ main {
 
 .selected-club-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.6rem;
   padding: 0.8rem 1rem;
   background: var(--white);
   border: 1px solid var(--border);
@@ -729,7 +727,7 @@ main {
 
 .selected-club-card-main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.9rem;
   min-width: 0;
   flex: 1;
@@ -779,16 +777,16 @@ main {
 
 .selected-club-actions {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 0.4rem;
-  flex-wrap: nowrap;
-  justify-content: flex-end;
-  flex-shrink: 0;
-  margin-left: auto;
+  width: fit-content;
 }
 
-.selected-club-actions .btn {
+.selected-club-actions .btn,
+.selected-club-actions .selected-club-link-btn {
   white-space: nowrap;
+  width: 100%;
 }
 .selected-club-name {
   font-size: 1rem;
@@ -805,7 +803,7 @@ main {
 }
 .selected-club-card {
   position: relative;
-  padding-right: 3.4rem;
+  padding-right: 2.8rem;
 }
 
 .sg-remove-club-btn {

@@ -1,10 +1,28 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   let showAllHits = false;
+  const SAVED_CONFIGS_KEY = 'pb_saved_configs_v1';
 
-  function buildClubUrl(clubId) {
-    const id = String(clubId || '').trim();
-    return id ? ('https://www.fussball.de/verein/-/id/' + encodeURIComponent(id)) : '';
+  function buildClubUrl(club) {
+    const id = String(club && club.id || '').trim();
+    if (!id) return '';
+    const url = new URL(window.location.origin + '/');
+    url.searchParams.set('clubId', id);
+    if (club && club.name) url.searchParams.set('clubName', String(club.name));
+    if (club && club.logoUrl) url.searchParams.set('clubLogoUrl', String(club.logoUrl));
+    if (club && club.location) url.searchParams.set('clubLocation', String(club.location));
+    return url.toString();
+  }
+
+  function readSavedConfigs() {
+    try {
+      const raw = window.localStorage.getItem(SAVED_CONFIGS_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
   }
 
   function fmt(value) {
@@ -17,17 +35,24 @@
     $('error').textContent = msg || '';
   }
 
-  function renderStats(stats) {
+  function renderStats(stats, hits) {
     const body = $('stats-body');
     body.innerHTML = '';
     const clubs = stats.clubs || [];
     const totalParses = clubs.reduce((sum, club) => sum + Number(club.parses || 0), 0);
+    const configHits = parseConfigHits((hits && hits.paths) || []);
+    const savedConfigs = readSavedConfigs();
+    const savedConfigIds = Object.keys(savedConfigs);
+    const mergedConfigIds = Array.from(new Set(savedConfigIds.concat(configHits.map(c => c.configId)))).sort();
 
     clubs.forEach((club) => {
       const tr = document.createElement('tr');
 
+      const typeCell = document.createElement('td');
+      typeCell.textContent = 'Verein';
+
       const nameCell = document.createElement('td');
-      const clubUrl = buildClubUrl(club.id);
+      const clubUrl = buildClubUrl(club);
       if (clubUrl && club.name) {
         const link = document.createElement('a');
         link.href = clubUrl;
@@ -36,31 +61,74 @@
         link.textContent = club.name;
         nameCell.appendChild(link);
       } else {
-        nameCell.textContent = club.name || '-';
+        nameCell.textContent = club.name || club.id || '-';
+      }
+      if (club.id) {
+        const code = document.createElement('code');
+        code.style.marginLeft = '6px';
+        code.textContent = String(club.id);
+        nameCell.appendChild(code);
       }
 
-      const idCell = document.createElement('td');
-      const code = document.createElement('code');
-      code.textContent = club.id || '-';
-      idCell.appendChild(code);
-
       const parsesCell = document.createElement('td');
-      parsesCell.textContent = String(club.parses || 0);
+      parsesCell.textContent = String(club.parses || 0) + ' Parses';
 
       const lastParsedCell = document.createElement('td');
       lastParsedCell.textContent = fmt(club.lastParsedAt);
 
+      tr.appendChild(typeCell);
       tr.appendChild(nameCell);
-      tr.appendChild(idCell);
       tr.appendChild(parsesCell);
       tr.appendChild(lastParsedCell);
       body.appendChild(tr);
     });
+
+    mergedConfigIds.forEach((configId) => {
+      const tr = document.createElement('tr');
+      const typeCell = document.createElement('td');
+      typeCell.textContent = 'Vereinsfilter';
+
+      const entryCell = document.createElement('td');
+      const link = document.createElement('a');
+      link.href = '/?config=' + encodeURIComponent(configId);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = configId;
+      entryCell.appendChild(link);
+
+      const cfg = savedConfigs[configId] || {};
+      const clubNames = [];
+      if (cfg.club && (cfg.club.name || cfg.club.id)) clubNames.push(cfg.club.name || cfg.club.id);
+      if (Array.isArray(cfg.additionalClubs)) {
+        cfg.additionalClubs.forEach((c) => clubNames.push((c && (c.name || c.id)) || ''));
+      }
+      if (clubNames.filter(Boolean).length) {
+        const hint = document.createElement('span');
+        hint.style.marginLeft = '6px';
+        hint.textContent = '· ' + clubNames.filter(Boolean).slice(0, 2).join(' + ');
+        entryCell.appendChild(hint);
+      }
+
+      const hit = configHits.find((row) => row.configId === configId);
+      const activityCell = document.createElement('td');
+      activityCell.textContent = String(hit ? hit.hits : 0) + ' Aufrufe';
+
+      const lastCell = document.createElement('td');
+      lastCell.textContent = fmt(cfg.updatedAt || null);
+
+      tr.appendChild(typeCell);
+      tr.appendChild(entryCell);
+      tr.appendChild(activityCell);
+      tr.appendChild(lastCell);
+      body.appendChild(tr);
+    });
+
     const training = stats.training || {};
     $('stats-meta').textContent = 'Gesamt: ' + totalParses + ' Parses, ' +
       (stats.totalClubs || clubs.length || 0) + ' Vereine, offene Trainingszeiten-Requests: ' +
       Number(training.pendingRequests || 0) + ', geparste Trainingszeiten: ' +
-      Number(training.parsedSessions || 0) + ', aktualisiert: ' + fmt(stats.updatedAt);
+      Number(training.parsedSessions || 0) + ', Vereinsfilter gesamt: ' +
+      mergedConfigIds.length + ', aktualisiert: ' + fmt(stats.updatedAt);
   }
 
   function parseConfigHits(paths) {
@@ -81,48 +149,6 @@
     return Array.from(counts.entries())
       .map(([configId, hits]) => ({ configId, hits }))
       .sort((a, b) => b.hits - a.hits || a.configId.localeCompare(b.configId));
-  }
-
-  function renderConfigHits(hits) {
-    const rows = parseConfigHits(hits.paths);
-    const body = $('config-hits-body');
-    body.innerHTML = '';
-
-    if (!rows.length) {
-      const tr = document.createElement('tr');
-      const td = document.createElement('td');
-      td.colSpan = 3;
-      td.textContent = 'Keine aufgerufenen Konfigurationen gefunden.';
-      tr.appendChild(td);
-      body.appendChild(tr);
-    } else {
-      rows.forEach((row) => {
-        const tr = document.createElement('tr');
-
-        const idCell = document.createElement('td');
-        const idCode = document.createElement('code');
-        idCode.textContent = row.configId;
-        idCell.appendChild(idCode);
-
-        const hitsCell = document.createElement('td');
-        hitsCell.textContent = String(row.hits);
-
-        const linkCell = document.createElement('td');
-        const link = document.createElement('a');
-        link.href = '/?config=' + encodeURIComponent(row.configId);
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = 'öffnen';
-        linkCell.appendChild(link);
-
-        tr.appendChild(idCell);
-        tr.appendChild(hitsCell);
-        tr.appendChild(linkCell);
-        body.appendChild(tr);
-      });
-    }
-
-    $('config-hits-meta').textContent = 'Gefundene Konfigurationen: ' + rows.length;
   }
 
   function renderHits(hits) {
@@ -161,7 +187,6 @@
         toggle.onclick = null;
       }
     }
-    renderConfigHits(hits);
   }
 
   async function loadDashboard() {
@@ -194,7 +219,7 @@
       return;
     }
 
-    renderStats(data.stats || {});
+    renderStats(data.stats || {}, data.pageHits || {});
     renderHits(data.pageHits || {});
     $('content').style.display = 'block';
   }
