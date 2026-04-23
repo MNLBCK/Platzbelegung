@@ -31,12 +31,17 @@ from platzbelegung.scraper import (
 # ---------------------------------------------------------------------------
 
 class TestFindPhpScript:
-    def test_finds_script_in_project_root(self):
-        """parse_matchplan.php wird im Projekt-Root gefunden."""
+    def test_finds_script_in_package_directory(self):
+        """parse_matchplan.php wird im Package-Verzeichnis gefunden (bundled standalone)."""
         script = _find_php_script()
         assert script is not None
         assert script.name == "parse_matchplan.php"
         assert script.exists()
+        # The package-bundled version is in the same directory as scraper.py
+        from pathlib import Path
+        import platzbelegung.scraper as _mod
+        pkg_dir = Path(_mod.__file__).parent
+        assert script == pkg_dir / "parse_matchplan.php"
 
     def test_env_var_overrides_default(self, tmp_path, monkeypatch):
         """PLATZBELEGUNG_PHP_SCRIPT überschreibt den Standard-Pfad."""
@@ -53,6 +58,16 @@ class TestFindPhpScript:
         script = _find_php_script()
         # Kann None sein wenn auch Standardpfad fehlt, aber nicht crashen
         assert script is None or script.exists()
+
+    def test_package_bundled_script_is_standalone(self):
+        """Die im Package gebundelte parse_matchplan.php hat keine require-Abhängigkeit zu backend.php."""
+        from pathlib import Path
+        import platzbelegung.scraper as _mod
+        pkg_script = Path(_mod.__file__).parent / "parse_matchplan.php"
+        assert pkg_script.exists()
+        content = pkg_script.read_text(encoding="utf-8")
+        # Standalone: darf kein require __DIR__ . '/backend.php' haben
+        assert "require __DIR__" not in content
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +134,8 @@ class TestScrapeClubMatchplan:
         assert "--id=CLUB001" in cmd
         assert any(a.startswith("--date-from=") for a in cmd)
         assert any(a.startswith("--date-to=") for a in cmd)
+        # scraper.timeout_seconds wird als --timeout weitergereicht (Fix P2)
+        assert any(a.startswith("--timeout=") for a in cmd)
 
     def test_parses_php_json_output(self):
         """PHP-JSON-Ausgabe wird korrekt in ScrapedGame-Objekte konvertiert."""

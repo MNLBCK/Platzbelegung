@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Single Source of Truth für die Spielplan-Normalisierung.
  *
  * Verwendung:
- *   php parse_matchplan.php --id=CLUB_ID --date-from=YYYY-MM-DD --date-to=YYYY-MM-DD [--max=N]
+ *   php parse_matchplan.php --id=CLUB_ID --date-from=YYYY-MM-DD --date-to=YYYY-MM-DD [--max=N] [--timeout=N]
  *
  * Ausgabe: JSON-Array der geparsten Spiele auf stdout.
  * Fehler: Meldung auf stderr, Exit-Code != 0.
@@ -25,16 +25,17 @@ if (PHP_SAPI !== 'cli') {
 define('PLATZBELEGUNG_CLI_PARSE', true);
 require __DIR__ . '/backend.php';
 
-$opts = getopt('', ['id:', 'date-from:', 'date-to:', 'max:']);
+$opts = getopt('', ['id:', 'date-from:', 'date-to:', 'max:', 'timeout:']);
 
 $id       = trim((string)($opts['id'] ?? ''));
 $dateFrom = trim((string)($opts['date-from'] ?? ''));
 $dateTo   = trim((string)($opts['date-to'] ?? ''));
 $max      = min(max((int)($opts['max'] ?? 100), 1), 200);
+$timeout  = max(1, (int)($opts['timeout'] ?? 15));
 
 if ($id === '' || $dateFrom === '' || $dateTo === '') {
     fwrite(STDERR, "Fehler: --id, --date-from und --date-to sind erforderlich.\n");
-    fwrite(STDERR, "Verwendung: php parse_matchplan.php --id=CLUB_ID --date-from=YYYY-MM-DD --date-to=YYYY-MM-DD\n");
+    fwrite(STDERR, "Verwendung: php parse_matchplan.php --id=CLUB_ID --date-from=YYYY-MM-DD --date-to=YYYY-MM-DD [--timeout=N]\n");
     exit(1);
 }
 
@@ -51,7 +52,7 @@ $url = FUSSBALL_DE_BASE
     . '/match-type/1/show-venues/checked/offset/0';
 
 try {
-    $html  = httpGet($url);
+    $html  = httpGet($url, $timeout);
     $games = parseClubMatchplanHtml($html);
     echo json_encode($games, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
     exit(0);

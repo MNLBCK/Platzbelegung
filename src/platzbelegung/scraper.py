@@ -38,8 +38,9 @@ def _find_php_script() -> Path | None:
 
     Suchreihenfolge:
     1. Umgebungsvariable ``PLATZBELEGUNG_PHP_SCRIPT``
-    2. Drei Ebenen über dieser Datei (Repo-Root beim Editable-Install)
-    3. Aktuelles Arbeitsverzeichnis
+    2. Gleiches Verzeichnis wie dieses Modul (für installierte Packages/wheel/venv)
+    3. Repo-Root-Pfad (für Editable-Installs aus dem Repository)
+    4. Aktuelles Arbeitsverzeichnis
     """
     env_path = os.environ.get("PLATZBELEGUNG_PHP_SCRIPT")
     if env_path:
@@ -47,9 +48,15 @@ def _find_php_script() -> Path | None:
         if p.exists():
             return p
 
-    candidate = Path(__file__).parent.parent.parent / "parse_matchplan.php"
-    if candidate.exists():
-        return candidate
+    # Bundled standalone version – works in installed wheel/venv (site-packages/platzbelegung/)
+    pkg_candidate = Path(__file__).parent / "parse_matchplan.php"
+    if pkg_candidate.exists():
+        return pkg_candidate
+
+    # Repo-root version – works for editable installs where __file__ is src/platzbelegung/scraper.py
+    repo_candidate = Path(__file__).parent.parent.parent / "parse_matchplan.php"
+    if repo_candidate.exists():
+        return repo_candidate
 
     cwd_candidate = Path.cwd() / "parse_matchplan.php"
     if cwd_candidate.exists():
@@ -229,6 +236,7 @@ class FussballDeScraper:
                     f"--date-from={date_from.strftime('%Y-%m-%d')}",
                     f"--date-to={date_to.strftime('%Y-%m-%d')}",
                     f"--max={min(limit, 200)}",
+                    f"--timeout={self._cfg.timeout_seconds}",
                 ],
                 capture_output=True,
                 # PHP macht intern einen HTTP-Request an fussball.de; der PHP-Prozess
