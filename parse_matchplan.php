@@ -56,6 +56,9 @@ try {
     echo json_encode($games, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
     exit(0);
 } catch (Throwable $e) {
-    fwrite(STDERR, 'Fehler beim Abrufen/Parsen: ' . $e->getMessage() . "\n");
+    fwrite(STDERR, sprintf(
+        "Fehler beim Abrufen/Parsen für Verein '%s' (%s – %s): %s\n",
+        $id, $dateFrom, $dateTo, $e->getMessage()
+    ));
     exit(1);
 }

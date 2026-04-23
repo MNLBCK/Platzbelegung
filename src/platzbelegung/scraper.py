@@ -231,6 +231,9 @@ class FussballDeScraper:
                     f"--max={min(limit, 200)}",
                 ],
                 capture_output=True,
+                # PHP macht intern einen HTTP-Request an fussball.de; der PHP-Prozess
+                # benötigt zusätzlich zur konfigurierten HTTP-Timeout-Zeit noch Zeit
+                # für Prozessstart und HTML-Parsing, daher 30 Sekunden Puffer.
                 timeout=self._cfg.timeout_seconds + 30,
             )
         except subprocess.TimeoutExpired as exc:

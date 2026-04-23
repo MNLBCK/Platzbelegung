@@ -112,12 +112,13 @@ class TestScrapeClubMatchplan:
             games = scraper.scrape_club_matchplan("CLUB001")
 
         mock_run.assert_called_once()
-        call_args = mock_run.call_args[0][0]
-        assert call_args[0] == "php"
-        assert any("parse_matchplan.php" in str(a) for a in call_args)
-        assert any("--id=CLUB001" in str(a) for a in call_args)
-        assert any("--date-from=" in str(a) for a in call_args)
-        assert any("--date-to=" in str(a) for a in call_args)
+        cmd = mock_run.call_args[0][0]
+        assert isinstance(cmd, list), "Erster Positional-Arg muss eine Liste sein"
+        assert cmd[0] == "php"
+        assert cmd[1].endswith("parse_matchplan.php")
+        assert "--id=CLUB001" in cmd
+        assert any(a.startswith("--date-from=") for a in cmd)
+        assert any(a.startswith("--date-to=") for a in cmd)
 
     def test_parses_php_json_output(self):
         """PHP-JSON-Ausgabe wird korrekt in ScrapedGame-Objekte konvertiert."""
@@ -206,8 +207,8 @@ class TestScrapeClubMatchplan:
         with patch("subprocess.run", return_value=_make_subprocess_result(b"[]")) as mock_run:
             scraper.scrape_club_matchplan("CLUB001", limit=50)
 
-        call_args = mock_run.call_args[0][0]
-        assert any("--max=50" in str(a) for a in call_args)
+        cmd = mock_run.call_args[0][0]
+        assert "--max=50" in cmd
 
     def test_max_capped_at_200(self):
         """--max wird auf maximal 200 begrenzt."""
@@ -215,8 +216,8 @@ class TestScrapeClubMatchplan:
         with patch("subprocess.run", return_value=_make_subprocess_result(b"[]")) as mock_run:
             scraper.scrape_club_matchplan("CLUB001", limit=999)
 
-        call_args = mock_run.call_args[0][0]
-        assert any("--max=200" in str(a) for a in call_args)
+        cmd = mock_run.call_args[0][0]
+        assert "--max=200" in cmd
 
     def test_timeout_raised_as_runtime_error(self):
         """TimeoutExpired wird in RuntimeError umgewandelt."""
