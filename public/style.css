@@ -1045,13 +1045,8 @@ main {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.venue-short-name {
-  font-weight: 700;
-  font-size: 0.88rem;
-  flex-shrink: 0;
-}
-.venue-full-name {
-  font-size: 0.78rem;
+.venue-name {
+  font-size: 0.84rem;
   color: var(--text-light);
   flex: 1;
   min-width: 0;
@@ -1175,11 +1170,16 @@ main {
   font-size: 0.72rem;
   color: var(--text-light);
 }
-.venues-selection-inline--compact .venue-full-name {
-  display: none;
-}
 .venues-selection-inline--compact .venue-checkbox-item {
-  padding: 0.22rem 0.4rem;
+  padding: 0.2rem 0.35rem;
+}
+.venues-selection-inline--compact .venues-checkboxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.22rem 0.45rem;
+}
+.venues-selection-inline--compact .venue-name {
+  font-size: 0.8rem;
 }
 .nav-controls {
   display: flex;
@@ -1204,6 +1204,16 @@ main {
 .week-grid-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+.week-venues-checkboxes {
+  margin-top: 0.55rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.25rem 0.5rem;
+}
+.week-venues-checkboxes .venue-checkbox-item {
+  padding: 0.3rem 0.42rem;
+  background: #f8fbf8;
 }
 
 /* Week Grid */

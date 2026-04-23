@@ -30,7 +30,6 @@
         <input id="password" type="password" placeholder="Admin-Passwort" />
         <button id="load">Daten laden</button>
       </div>
-      <div class="muted">Verwendet das gleiche Passwort wie <code>/api/admin/club-parse-stats</code>.</div>
       <div id="error" class="error"></div>
     </div>
 
@@ -56,6 +55,15 @@
       <div class="card">
         <h2>Gespeicherte Konfiguration</h2>
         <pre id="config-json"></pre>
+      </div>
+
+      <div class="card">
+        <h2>Aufgerufene Konfigurationen</h2>
+        <div id="config-hits-meta" class="muted"></div>
+        <table>
+          <thead><tr><th>Konfig-ID</th><th>Aufrufe</th><th>Link</th></tr></thead>
+          <tbody id="config-hits-body"></tbody>
+        </table>
       </div>
     </div>
   </div>
