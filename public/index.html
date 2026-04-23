@@ -138,8 +138,8 @@
           <div class="team-overview-table"><span class="team-overview-name">SGM SKV Hochberg/SGV Hochdorf II</span><span class="team-overview-comp">E-Junioren | Kreisstaffel</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
         </div>
         </details>
-        <div class="config-actions">
-          <button id="save-club-config-btn" class="btn btn-secondary" type="button">Konfiguration speichern</button>
+        <div class="config-actions config-actions-subtle">
+          <button id="save-club-config-btn" class="btn btn-sm btn-quiet" type="button">speichern</button>
           <input
             type="text"
             id="club-config-id-input"
@@ -147,7 +147,7 @@
             placeholder="Konfig-ID"
             autocomplete="off"
           />
-          <button id="load-club-config-btn" class="btn btn-secondary" type="button">Konfiguration laden</button>
+          <button id="load-club-config-btn" class="btn btn-sm btn-quiet" type="button">laden</button>
         </div>
       </div>
       <div id="club-config-status" class="hint current-club hidden"></div>
@@ -156,29 +156,12 @@
       <!-- Modal is rendered at document root to avoid clipping and ensure correct overlay behavior -->
     </section>
 
-    <!-- Section 2: Spielstätten -->
-    <section class="panel section-step hidden" id="section-spielstaetten">
-      <h2 class="section-title">
-        <span class="section-num">2</span> Spielstätten
-        <span class="tooltip-wrap">
-          <button class="tooltip-btn" type="button" aria-label="Info">?</button>
-          <span class="tooltip-content">Spielstätten werden automatisch aus dem Vereinsspielplan ermittelt (nächste 2 Monate). Wähle ab, welche im Kalender erscheinen sollen – die Auswahl wird gespeichert.</span>
-        </span>
-      </h2>
-      <div id="venues-loading" class="loading hidden">
-        <span class="spinner"></span> Spielstätten werden geladen…
-      </div>
-      <div id="venues-empty" class="empty-msg">Bitte zuerst einen Verein auswählen.</div>
-      <div id="venues-checkboxes" class="venues-checkboxes hidden"></div>
-      <div id="venues-error" class="error-msg hidden"></div>
-    </section>
-
-    <!-- Section 3: Belegungskalender -->
+    <!-- Section 2: Belegungskalender -->
     <section class="panel hidden" id="section-kalender">
       <div class="panel-header">
         <div class="panel-header-top">
           <h2 class="section-title">
-            <span class="section-num">3</span> Belegungskalender
+            <span class="section-num">2</span> Belegungskalender
           </h2>
           <div class="view-controls">
             <button class="btn btn-sm btn-active" id="view-week-btn">Woche</button>
@@ -191,6 +174,19 @@
           <span id="current-period-label" class="week-label"></span>
           <button class="btn btn-sm" id="next-period-btn" aria-label="Weiter">&#8250;</button>
         </div>
+      </div>
+
+      <div id="venues-loading" class="loading hidden">
+        <span class="spinner"></span> Spielstätten werden geladen…
+      </div>
+      <div id="venues-empty" class="empty-msg">Bitte zuerst einen Verein auswählen.</div>
+      <div id="venues-error" class="error-msg hidden"></div>
+      <div id="venues-selection-inline" class="venues-selection-inline hidden">
+        <div class="venues-selection-head">
+          <span class="venues-selection-title">Spielstätten</span>
+          <span class="venues-selection-hint">Monat: kompakte Auswahl oben · Woche: Auswahl direkt im Kalender</span>
+        </div>
+        <div id="venues-checkboxes" class="venues-checkboxes"></div>
       </div>
 
       <div id="loading-indicator" class="loading hidden">
