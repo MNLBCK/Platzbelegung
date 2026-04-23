@@ -279,6 +279,10 @@ EOF
     lftp_script+=$'\n'"put -O $remote_data_dir data/latest.html"
   fi
 
+  if [[ -f "$ROOT_DIR/.stats_password" ]]; then 
+    lftp_script+=$'\n'"put -O $DEPLOY_REMOTE_DIR .stats_password" 
+  fi
+ 
   lftp_script+=$'\nbye'
 
   lftp -u "$DEPLOY_USER","$DEPLOY_PASS" "$lftp_url" -e "$lftp_script"
@@ -325,6 +329,11 @@ upload_with_rsync() {
   if is_true "$GENERATE_HTML" && [[ -f "$ROOT_DIR/data/latest.html" ]]; then
     echo "==> Lade data/latest.html hoch"
     rsync -av -e "$ssh_cmd" "$ROOT_DIR/data/latest.html" "$remote:$DEPLOY_REMOTE_DIR/data/latest.html"
+  fi
+
+  if [[ -f "$ROOT_DIR/.stats_password" ]]; then 
+    echo "==> Lade .stats_password hoch"
+    rsync -av -e "$sshcmd" "$ROOT_DIR/.stats_password" "$remote:$DEPLOY_REMOTE_DIR/.stats_password" 
   fi
 }
 
