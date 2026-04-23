@@ -407,6 +407,30 @@ function recordClubParse(string $clubId, string $clubName = '', string $clubLogo
     saveUsageStats($stats);
 }
 
+function loadTrainingAdminStats(): array
+{
+    $pendingDir = DATA_DIR . '/requests/pending';
+    $pendingRequests = 0;
+    if (is_dir($pendingDir)) {
+        $files = glob($pendingDir . '/*.json');
+        $pendingRequests = is_array($files) ? count($files) : 0;
+    }
+
+    $snapshot = loadLatestSnapshot();
+    $parsedSessions = 0;
+    if (is_array($snapshot)) {
+        $sessions = $snapshot['training_sessions'] ?? [];
+        if (is_array($sessions)) {
+            $parsedSessions = count($sessions);
+        }
+    }
+
+    return [
+        'pendingRequests' => $pendingRequests,
+        'parsedSessions' => $parsedSessions,
+    ];
+}
+
 function buildStatsResponse(array $stats): array
 {
     $clubs = [];
@@ -442,6 +466,7 @@ function buildStatsResponse(array $stats): array
         'totalClubs' => count($clubs),
         'totalParses' => $totalParses,
         'clubs' => $clubs,
+        'training' => loadTrainingAdminStats(),
     ];
 }
 

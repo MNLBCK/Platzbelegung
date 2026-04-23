@@ -1,5 +1,11 @@
 (function () {
   const $ = (id) => document.getElementById(id);
+  let showAllHits = false;
+
+  function buildClubUrl(clubId) {
+    const id = String(clubId || '').trim();
+    return id ? ('https://www.fussball.de/verein/-/id/' + encodeURIComponent(id)) : '';
+  }
 
   function fmt(value) {
     if (!value) return '-';
@@ -14,11 +20,24 @@
   function renderStats(stats) {
     const body = $('stats-body');
     body.innerHTML = '';
-    (stats.clubs || []).forEach((club) => {
+    const clubs = stats.clubs || [];
+    const totalParses = clubs.reduce((sum, club) => sum + Number(club.parses || 0), 0);
+
+    clubs.forEach((club) => {
       const tr = document.createElement('tr');
 
       const nameCell = document.createElement('td');
-      nameCell.textContent = club.name || '-';
+      const clubUrl = buildClubUrl(club.id);
+      if (clubUrl && club.name) {
+        const link = document.createElement('a');
+        link.href = clubUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = club.name;
+        nameCell.appendChild(link);
+      } else {
+        nameCell.textContent = club.name || '-';
+      }
 
       const idCell = document.createElement('td');
       const code = document.createElement('code');
@@ -37,8 +56,11 @@
       tr.appendChild(lastParsedCell);
       body.appendChild(tr);
     });
-    $('stats-meta').textContent = 'Gesamt: ' + (stats.totalParses || 0) + ' Parses, ' +
-      (stats.totalClubs || 0) + ' Vereine, aktualisiert: ' + fmt(stats.updatedAt);
+    const training = stats.training || {};
+    $('stats-meta').textContent = 'Gesamt: ' + totalParses + ' Parses, ' +
+      (stats.totalClubs || clubs.length || 0) + ' Vereine, offene Trainingszeiten-Requests: ' +
+      Number(training.pendingRequests || 0) + ', geparste Trainingszeiten: ' +
+      Number(training.parsedSessions || 0) + ', aktualisiert: ' + fmt(stats.updatedAt);
   }
 
   function parseConfigHits(paths) {
@@ -104,9 +126,13 @@
   }
 
   function renderHits(hits) {
+    const toggle = $('hits-toggle');
     const body = $('hits-body');
     body.innerHTML = '';
-    (hits.paths || []).forEach((row) => {
+    const rows = hits.paths || [];
+    const visibleRows = showAllHits ? rows : rows.slice(0, 10);
+
+    visibleRows.forEach((row) => {
       const tr = document.createElement('tr');
       const pathCell = document.createElement('td');
       const code = document.createElement('code');
@@ -121,6 +147,20 @@
       body.appendChild(tr);
     });
     $('hits-meta').textContent = 'Gesamt: ' + (hits.total || 0) + ' Hits, aktualisiert: ' + fmt(hits.updatedAt);
+
+    if (toggle) {
+      if (rows.length > 10) {
+        toggle.style.display = 'inline-block';
+        toggle.textContent = showAllHits ? 'Weniger anzeigen' : 'Weitere anzeigen';
+        toggle.onclick = () => {
+          showAllHits = !showAllHits;
+          renderHits(hits);
+        };
+      } else {
+        toggle.style.display = 'none';
+        toggle.onclick = null;
+      }
+    }
     renderConfigHits(hits);
   }
 
