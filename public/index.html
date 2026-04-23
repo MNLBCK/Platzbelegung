@@ -50,7 +50,7 @@
       </div>
       <div id="club-selection-dialog">
         <div id="recent-clubs" class="recent-clubs hidden"></div>
-        <div id="selected-club-info" class="selected-club-info">
+        <div id="selected-club-info" class="selected-club-info hidden">
         <div class="selected-club-label">Ausgewählte Vereine</div>
         <div class="selected-club-cards">
           <div class="selected-club-card">
@@ -62,7 +62,7 @@
               </div>
             </div>
             <div class="selected-club-actions">
-              <a class="btn btn-sm btn-secondary selected-club-link-btn" href="https://www.fussball.de/verein/sgv-hochdorf-wuerttemberg/-/id/00ES8GNAVO00000RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">fussball.de ↗</a>
+              <a class="btn btn-sm btn-secondary selected-club-link-btn" href="https://www.fussball.de/verein/sgv-hochdorf-wuerttemberg/-/id/00ES8GNAVO00000RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">fussball.de</a>
               <button class="btn btn-sm" data-club-id="00ES8GNAVO00000RVV0AG08LVUPGND5I" title="+ Training" aria-label="Training melden">+ Training</button>
             </div>
           </div>
@@ -75,7 +75,7 @@
               </div>
             </div>
             <div class="selected-club-actions">
-              <a class="btn btn-sm btn-secondary selected-club-link-btn" href="https://www.fussball.de/verein/vfb-neckarrems-wuerttemberg/-/id/00ES8GNAVO00009RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">fussball.de ↗</a>
+              <a class="btn btn-sm btn-secondary selected-club-link-btn" href="https://www.fussball.de/verein/vfb-neckarrems-wuerttemberg/-/id/00ES8GNAVO00009RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">fussball.de</a>
               <button class="btn btn-sm" data-club-id="00ES8GNAVO00009RVV0AG08LVUPGND5I" title="+ Training" aria-label="Training melden">+ Training</button>
               <button class="sg-remove-club-btn" data-club-id="00ES8GNAVO00009RVV0AG08LVUPGND5I" title="Verein entfernen" aria-label="Verein entfernen">×</button>
             </div>
@@ -89,13 +89,14 @@
               </div>
             </div>
             <div class="selected-club-actions">
-              <a class="btn btn-sm btn-secondary selected-club-link-btn" href="https://www.fussball.de/verein/skv-hochberg-wuerttemberg/-/id/00ES8GNAVO00000PVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">fussball.de ↗</a>
+              <a class="btn btn-sm btn-secondary selected-club-link-btn" href="https://www.fussball.de/verein/skv-hochberg-wuerttemberg/-/id/00ES8GNAVO00000PVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">fussball.de</a>
               <button class="btn btn-sm" data-club-id="00ES8GNAVO00000PVV0AG08LVUPGND5I" title="+ Training" aria-label="Training melden">+ Training</button>
               <button class="sg-remove-club-btn" data-club-id="00ES8GNAVO00000PVV0AG08LVUPGND5I" title="Verein entfernen" aria-label="Verein entfernen">×</button>
             </div>
           </div>
         </div>
         </div>
+        <div class="club-search-heading">Verein hinzufügen</div>
         <div class="input-row">
           <input
             type="text"
@@ -138,7 +139,7 @@
           <div class="team-overview-table"><span class="team-overview-name">SGM SKV Hochberg/SGV Hochdorf II</span><span class="team-overview-comp">E-Junioren | Kreisstaffel</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
         </div>
         </details>
-        <div class="config-actions config-actions-subtle">
+        <div id="club-config-actions" class="config-actions config-actions-subtle">
           <button id="save-club-config-btn" class="btn btn-sm btn-quiet" type="button">speichern</button>
           <input
             type="text"
@@ -184,9 +185,9 @@
       <div id="venues-selection-inline" class="venues-selection-inline hidden">
         <div class="venues-selection-head">
           <span class="venues-selection-title">Spielstätten</span>
-          <span class="venues-selection-hint">Monat: kompakte Auswahl oben</span>
         </div>
         <div id="venues-checkboxes" class="venues-checkboxes"></div>
+        <div id="venues-month-legend"></div>
       </div>
 
       <div id="loading-indicator" class="loading hidden">

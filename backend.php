@@ -431,13 +431,57 @@ function loadTrainingAdminStats(): array
     ];
 }
 
+function loadTrainingCountsByClub(): array
+{
+    $counts = [];
+    $add = function(string $clubName, string $field) use (&$counts): void {
+        $name = normalizeText($clubName);
+        if ($name === '') return;
+        if (!isset($counts[$name])) {
+            $counts[$name] = ['requested' => 0, 'parsed' => 0];
+        }
+        $counts[$name][$field] = (int)($counts[$name][$field] ?? 0) + 1;
+    };
+
+    $pendingDir = DATA_DIR . '/requests/pending';
+    if (is_dir($pendingDir)) {
+        $files = glob($pendingDir . '/*.json');
+        if (is_array($files)) {
+            foreach ($files as $file) {
+                $raw = file_get_contents($file);
+                if ($raw === false) continue;
+                $entry = json_decode($raw, true);
+                if (!is_array($entry)) continue;
+                $add((string)($entry['club_name'] ?? ''), 'requested');
+            }
+        }
+    }
+
+    $snapshot = loadLatestSnapshot();
+    if (is_array($snapshot)) {
+        $sessions = $snapshot['training_sessions'] ?? [];
+        if (is_array($sessions)) {
+            foreach ($sessions as $session) {
+                if (!is_array($session)) continue;
+                $clubName = (string)($session['club_name'] ?? $session['clubName'] ?? '');
+                $add($clubName, 'parsed');
+            }
+        }
+    }
+
+    return $counts;
+}
+
 function buildStatsResponse(array $stats): array
 {
+    $trainingByClub = loadTrainingCountsByClub();
     $clubs = [];
     foreach (($stats['clubs'] ?? []) as $club) {
         if (!is_array($club)) {
             continue;
         }
+        $clubName = normalizeText((string)($club['name'] ?? ''));
+        $trainingCounts = $trainingByClub[$clubName] ?? ['requested' => 0, 'parsed' => 0];
         $clubs[] = [
             'id' => (string)($club['id'] ?? ''),
             'name' => (string)($club['name'] ?? ''),
@@ -445,6 +489,8 @@ function buildStatsResponse(array $stats): array
             'postalCode' => (string)($club['postalCode'] ?? ''),
             'location' => (string)($club['location'] ?? ''),
             'parses' => (int)($club['parses'] ?? 0),
+            'trainingRequested' => (int)($trainingCounts['requested'] ?? 0),
+            'trainingParsed' => (int)($trainingCounts['parsed'] ?? 0),
             'lastParsedAt' => $club['lastParsedAt'] ?? null,
         ];
     }

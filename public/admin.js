@@ -1,6 +1,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   let showAllHits = false;
+  let statsLimit = 10;
   const SAVED_CONFIGS_KEY = 'pb_saved_configs_v1';
 
   function buildClubUrl(club) {
@@ -45,11 +46,8 @@
     const savedConfigIds = Object.keys(savedConfigs);
     const mergedConfigIds = Array.from(new Set(savedConfigIds.concat(configHits.map(c => c.configId)))).sort();
 
-    clubs.forEach((club) => {
+    const clubRows = clubs.map((club) => {
       const tr = document.createElement('tr');
-
-      const typeCell = document.createElement('td');
-      typeCell.textContent = 'Verein';
 
       const nameCell = document.createElement('td');
       const clubUrl = buildClubUrl(club);
@@ -73,20 +71,21 @@
       const parsesCell = document.createElement('td');
       parsesCell.textContent = String(club.parses || 0) + ' Parses';
 
+      const trainingCell = document.createElement('td');
+      trainingCell.textContent = String(club.trainingRequested || 0) + ' / ' + String(club.trainingParsed || 0);
+
       const lastParsedCell = document.createElement('td');
       lastParsedCell.textContent = fmt(club.lastParsedAt);
 
-      tr.appendChild(typeCell);
       tr.appendChild(nameCell);
       tr.appendChild(parsesCell);
+      tr.appendChild(trainingCell);
       tr.appendChild(lastParsedCell);
-      body.appendChild(tr);
+      return { activity: Number(club.parses || 0), row: tr };
     });
 
-    mergedConfigIds.forEach((configId) => {
+    const filterRows = mergedConfigIds.map((configId) => {
       const tr = document.createElement('tr');
-      const typeCell = document.createElement('td');
-      typeCell.textContent = 'Vereinsfilter';
 
       const entryCell = document.createElement('td');
       const link = document.createElement('a');
@@ -113,17 +112,41 @@
       const activityCell = document.createElement('td');
       activityCell.textContent = String(hit ? hit.hits : 0) + ' Aufrufe';
 
+      const trainingCell = document.createElement('td');
+      trainingCell.textContent = '-';
+
       const lastCell = document.createElement('td');
       lastCell.textContent = fmt(cfg.updatedAt || null);
 
-      tr.appendChild(typeCell);
       tr.appendChild(entryCell);
       tr.appendChild(activityCell);
+      tr.appendChild(trainingCell);
       tr.appendChild(lastCell);
-      body.appendChild(tr);
+      return { activity: Number(hit ? hit.hits : 0), row: tr };
     });
 
+    const appendGroup = (title, items) => {
+      const sorted = items.sort((a, b) => b.activity - a.activity).slice(0, statsLimit);
+      const head = document.createElement('tr');
+      head.className = 'group-row';
+      const headCell = document.createElement('td');
+      headCell.colSpan = 4;
+      headCell.textContent = title + ' (' + sorted.length + ' von ' + items.length + ')';
+      head.appendChild(headCell);
+      body.appendChild(head);
+      sorted.forEach(item => body.appendChild(item.row));
+    };
+
+    appendGroup('Vereine', clubRows);
+    appendGroup('Vereinsfilter', filterRows);
+
     const training = stats.training || {};
+    $('kpi-parses').textContent = String(totalParses);
+    $('kpi-clubs').textContent = String(stats.totalClubs || clubs.length || 0);
+    $('kpi-filters').textContent = String(mergedConfigIds.length);
+    $('kpi-training-requests').textContent = String(training.pendingRequests || 0);
+    $('kpi-training-parsed').textContent = String(training.parsedSessions || 0);
+
     $('stats-meta').textContent = 'Gesamt: ' + totalParses + ' Parses, ' +
       (stats.totalClubs || clubs.length || 0) + ' Vereine, offene Trainingszeiten-Requests: ' +
       Number(training.pendingRequests || 0) + ', geparste Trainingszeiten: ' +
@@ -222,6 +245,14 @@
     renderStats(data.stats || {}, data.pageHits || {});
     renderHits(data.pageHits || {});
     $('content').style.display = 'block';
+  }
+
+  const statsLimitEl = $('stats-limit');
+  if (statsLimitEl) {
+    statsLimitEl.addEventListener('change', () => {
+      statsLimit = Number(statsLimitEl.value || 10);
+      $('load').click();
+    });
   }
 
   $('load').addEventListener('click', loadDashboard);

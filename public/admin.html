@@ -18,6 +18,14 @@
     .error { color: #b00020; margin-top: 8px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e4eaf5; font-size: 14px; }
+    .stats-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap:10px; margin-bottom:12px; }
+    .stat-tile { background:#f7faff; border:1px solid #dbe6fb; border-radius:10px; padding:10px 12px; }
+    .stat-k { font-size:12px; color:#567; margin-bottom:4px; }
+    .stat-v { font-size:22px; font-weight:700; color:#154ed0; line-height:1.1; }
+    .group-row td { background:#f3f7fe; font-weight:700; color:#2a3f66; border-top:1px solid #dbe6fb; }
+    .table-controls { display:flex; justify-content:flex-end; gap:8px; align-items:center; margin: 4px 0 10px; }
+    .table-controls label { font-size: 13px; color:#456; }
+    select { padding: 8px 10px; border: 1px solid #b8c7e0; border-radius: 8px; }
     pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; font-size: 13px; }
   </style>
 </head>
@@ -37,8 +45,23 @@
       <div class="card">
         <h2>Vereine &amp; Vereinsfilter</h2>
         <div id="stats-meta" class="muted"></div>
+        <div class="stats-grid">
+          <div class="stat-tile"><div class="stat-k">Parses gesamt</div><div class="stat-v" id="kpi-parses">0</div></div>
+          <div class="stat-tile"><div class="stat-k">Vereine</div><div class="stat-v" id="kpi-clubs">0</div></div>
+          <div class="stat-tile"><div class="stat-k">Vereinsfilter</div><div class="stat-v" id="kpi-filters">0</div></div>
+          <div class="stat-tile"><div class="stat-k">Offene Trainings-Requests</div><div class="stat-v" id="kpi-training-requests">0</div></div>
+          <div class="stat-tile"><div class="stat-k">Geparste Trainingszeiten</div><div class="stat-v" id="kpi-training-parsed">0</div></div>
+        </div>
+        <div class="table-controls">
+          <label for="stats-limit">Anzeigen:</label>
+          <select id="stats-limit">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+          </select>
+        </div>
         <table>
-          <thead><tr><th>Typ</th><th>Eintrag</th><th>Aktivität</th><th>Zuletzt</th></tr></thead>
+          <thead><tr><th>Eintrag</th><th>Aktivität</th><th>Training (Req/Parsed)</th><th>Zuletzt</th></tr></thead>
           <tbody id="stats-body"></tbody>
         </table>
       </div>

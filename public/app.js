@@ -756,6 +756,8 @@ function renderTeamOverview() {
 function updateSectionVisibility() {
   const hasClub = !!(state.club && state.club.id);
   showEl($('section-kalender'), hasClub);
+  showEl($('club-config-actions'), hasClub);
+  if (!hasClub) showEl($('club-config-status'), false);
 }
 
 function renderCompactClubSelection() {
@@ -1096,10 +1098,8 @@ function renderSelectedClub() {
   if (!el) return;
   const club = state.club;
   if (!club) {
-    el.innerHTML =
-      '<div class="selected-club-label">Ausgewählter Verein</div>' +
-      '<div class="selected-club-cards"><div class="selected-club-card selected-club-card--empty">Bitte Verein auswählen</div></div>';
-    showEl(el, true);
+    el.innerHTML = '';
+    showEl(el, false);
     return;
   }
   const allClubs = getAllClubs();
@@ -1116,12 +1116,14 @@ function renderSelectedClub() {
           '<div class="selected-club-logo-wrap">' + logoHtml + '</div>' +
           '<div class="selected-club-details">' +
             '<div class="selected-club-name">' + escapeHtml(c.name) + '</div>' +
-            (c.location ? '<div class="selected-club-location">' + escapeHtml(c.location) + '</div>' : '') +
+            '<div class="selected-club-meta-row">' +
+              (c.location ? '<div class="selected-club-location">' + escapeHtml(c.location) + '</div>' : '<div class="selected-club-location"> </div>') +
+              '<div class="selected-club-actions">' +
+                (clubUrl ? '<a class="btn btn-sm btn-secondary selected-club-link-btn" href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">fussball.de</a>' : '') +
+                '<button class="btn btn-sm add-training-club-card-btn" data-club-id="' + escapeHtml(c.id) + '">+ Training</button>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
-        '</div>' +
-        '<div class="selected-club-actions">' +
-          (clubUrl ? '<a class="btn btn-sm btn-secondary selected-club-link-btn" href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">fussball.de &#8599;</a>' : '') +
-          '<button class="btn btn-sm add-training-club-card-btn" data-club-id="' + escapeHtml(c.id) + '">+ Training</button>' +
         '</div>' +
         removeBtn +
       '</div>'
@@ -1806,8 +1808,8 @@ function renderWeekView() {
     grid.appendChild(hd);
   });
 
-  const visibleVenues = getVisibleVenues();
-  if (!visibleVenues.length) {
+  const allVenues = state.venues.slice();
+  if (!allVenues.length) {
     showEl($('no-games-msg'), true);
     showEl($('week-view'), false);
     return;
@@ -1815,7 +1817,7 @@ function renderWeekView() {
 
   const hasWeekGames = state.games.some(game => {
     const vid = deriveVenueId(game);
-    if (!visibleVenues.find(v => v.id === vid)) return false;
+    if (!isVenueSelected(vid)) return false;
     const d = new Date(game.startDate);
     return d >= weekStart && d < weekEndExclusive;
   });
@@ -1823,9 +1825,10 @@ function renderWeekView() {
 
   const weekGames = [];
 
-  visibleVenues.forEach((venue, index) => {
+  allVenues.forEach((venue, index) => {
     const colorIndex = state.venues.findIndex(v => v.id === venue.id);
     const vColor     = VENUE_COLORS[colorIndex % VENUE_COLORS.length];
+    const venueVisible = isVenueSelected(venue.id);
 
     // Full-width venue name header spanning all 7 columns
     const rowHeader = document.createElement('div');
@@ -1856,10 +1859,16 @@ function renderWeekView() {
     days.forEach(day => {
       const cell = document.createElement('div');
       cell.className = 'wg-cell' + (index % 2 === 0 ? ' wg-row-even' : '');
+      if (!venueVisible) cell.classList.add('wg-cell-hidden');
 
       const dayGames = state.games
         .filter(g => deriveVenueId(g) === venue.id && isSameDay(new Date(g.startDate), day))
         .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+      if (!venueVisible) {
+        grid.appendChild(cell);
+        return;
+      }
 
       dayGames.forEach(game => {
         weekGames.push(game);
@@ -1921,6 +1930,8 @@ function renderMonthView() {
 
   const listEl = $('month-list');
   listEl.innerHTML = '';
+  const monthLegendEl = $('venues-month-legend');
+  if (monthLegendEl) monthLegendEl.innerHTML = '';
 
   const visibleVenues = getVisibleVenues();
   const visibleIds = new Set(visibleVenues.map(v => v.id));
@@ -1947,8 +1958,8 @@ function renderMonthView() {
 
   showEl($('no-games-msg'), false);
 
-  // Legend for team categories visible in this month (at top)
-  renderLegend(monthGames, listEl);
+  // Legend for team categories visible in this month (in venues box)
+  if (monthLegendEl) renderLegend(monthGames, monthLegendEl);
 
   const byDay = new Map();
   monthGames.forEach(game => {
