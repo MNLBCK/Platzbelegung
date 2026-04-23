@@ -450,7 +450,7 @@ PY;
     return $exitCode === 0;
 }
 
-function httpGet(string $url): string
+function httpGet(string $url, int $timeout = 15): string
 {
     $headers = [
         'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -462,7 +462,7 @@ function httpGet(string $url): string
         'http' => [
             'method' => 'GET',
             'header' => implode("\r\n", $headers),
-            'timeout' => 15,
+            'timeout' => $timeout,
         ],
     ]);
 
@@ -775,6 +775,13 @@ function getJsonBody(): array
     if (!$raw) return [];
     $data = json_decode($raw, true);
     return is_array($data) ? $data : [];
+}
+
+// HTTP-Routing nur im Web-Context ausführen; CLI-Skripte (z.B. parse_matchplan.php)
+// können backend.php sicher per require einbinden, ohne dass Routing ausgelöst wird.
+// Dazu muss die einbindende Datei PLATZBELEGUNG_CLI_PARSE vor dem require definieren.
+if (defined('PLATZBELEGUNG_CLI_PARSE')) {
+    return;
 }
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
