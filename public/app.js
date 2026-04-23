@@ -760,6 +760,13 @@ function updateSectionVisibility() {
   if (!hasClub) showEl($('club-config-status'), false);
 }
 
+function updateClubSectionTitle() {
+  const titleEl = $('section-verein-title');
+  if (!titleEl) return;
+  const count = getAllClubs().length;
+  titleEl.textContent = count > 1 ? 'Vereine' : 'Verein';
+}
+
 function renderCompactClubSelection() {
   const compactEl = $('selected-club-compact');
   const logosEl = $('selected-club-compact-logos');
@@ -1096,6 +1103,7 @@ function selectClub(club) {
 function renderSelectedClub() {
   const el = $('selected-club-info');
   if (!el) return;
+  updateClubSectionTitle();
   const club = state.club;
   if (!club) {
     el.innerHTML = '';

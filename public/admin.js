@@ -61,12 +61,6 @@
       } else {
         nameCell.textContent = club.name || club.id || '-';
       }
-      if (club.id) {
-        const code = document.createElement('code');
-        code.style.marginLeft = '6px';
-        code.textContent = String(club.id);
-        nameCell.appendChild(code);
-      }
 
       const parsesCell = document.createElement('td');
       parsesCell.textContent = String(club.parses || 0) + ' Parses';
@@ -104,7 +98,7 @@
       if (clubNames.filter(Boolean).length) {
         const hint = document.createElement('span');
         hint.style.marginLeft = '6px';
-        hint.textContent = '· ' + clubNames.filter(Boolean).slice(0, 2).join(' + ');
+        hint.textContent = '· ' + clubNames.filter(Boolean).join(' + ');
         entryCell.appendChild(hint);
       }
 
@@ -125,20 +119,16 @@
       return { activity: Number(hit ? hit.hits : 0), row: tr };
     });
 
-    const appendGroup = (title, items) => {
+    const appendGroup = (items, addSeparator = false) => {
       const sorted = items.sort((a, b) => b.activity - a.activity).slice(0, statsLimit);
-      const head = document.createElement('tr');
-      head.className = 'group-row';
-      const headCell = document.createElement('td');
-      headCell.colSpan = 4;
-      headCell.textContent = title + ' (' + sorted.length + ' von ' + items.length + ')';
-      head.appendChild(headCell);
-      body.appendChild(head);
-      sorted.forEach(item => body.appendChild(item.row));
+      sorted.forEach((item, idx) => {
+        if (addSeparator && idx === 0) item.row.classList.add('group-sep');
+        body.appendChild(item.row);
+      });
     };
 
-    appendGroup('Vereine', clubRows);
-    appendGroup('Vereinsfilter', filterRows);
+    appendGroup(clubRows);
+    appendGroup(filterRows, true);
 
     const training = stats.training || {};
     $('kpi-parses').textContent = String(totalParses);
@@ -147,11 +137,6 @@
     $('kpi-training-requests').textContent = String(training.pendingRequests || 0);
     $('kpi-training-parsed').textContent = String(training.parsedSessions || 0);
 
-    $('stats-meta').textContent = 'Gesamt: ' + totalParses + ' Parses, ' +
-      (stats.totalClubs || clubs.length || 0) + ' Vereine, offene Trainingszeiten-Requests: ' +
-      Number(training.pendingRequests || 0) + ', geparste Trainingszeiten: ' +
-      Number(training.parsedSessions || 0) + ', Vereinsfilter gesamt: ' +
-      mergedConfigIds.length + ', aktualisiert: ' + fmt(stats.updatedAt);
   }
 
   function parseConfigHits(paths) {
