@@ -56,6 +56,7 @@ const COOKIE_VENUES       = 'pb_venues';
 const COOKIE_VIEW         = 'pb_view';
 const COOKIE_EXTRA_CLUBS  = 'pb_extra_clubs';
 const SAVED_CONFIGS_KEY   = 'pb_saved_configs_v1';
+const RECENT_CONFIGS_KEY  = 'pb_recent_configs_v1';
 const URL_CONFIG_PARAM    = 'config';
 
 const VENUE_COLORS = [
@@ -754,7 +755,6 @@ function renderTeamOverview() {
 
 function updateSectionVisibility() {
   const hasClub = !!(state.club && state.club.id);
-  showEl($('section-spielstaetten'), hasClub);
   showEl($('section-kalender'), hasClub);
 }
 
@@ -844,6 +844,41 @@ function writeSavedConfigs(configs) {
   } catch (_) {}
 }
 
+function readRecentConfigs() {
+  try {
+    const raw = localStorage.getItem(RECENT_CONFIGS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeRecentConfigs(entries) {
+  try {
+    localStorage.setItem(RECENT_CONFIGS_KEY, JSON.stringify(Array.isArray(entries) ? entries : []));
+  } catch (_) {}
+}
+
+function saveRecentConfig(configId, configData) {
+  const cleanId = sanitizeConfigId(configId);
+  if (!cleanId) return;
+  const recent = readRecentConfigs().filter(entry => sanitizeConfigId(entry && entry.id) !== cleanId);
+  const clubs = [];
+  if (configData && configData.club) clubs.push(configData.club.name || configData.club.id || '');
+  if (configData && Array.isArray(configData.additionalClubs)) {
+    configData.additionalClubs.forEach(c => clubs.push(c.name || c.id || ''));
+  }
+  const label = clubs.filter(Boolean).slice(0, 2).join(' + ') || cleanId;
+  recent.unshift({
+    id: cleanId,
+    label,
+    usedAt: new Date().toISOString(),
+  });
+  writeRecentConfigs(recent.slice(0, 5));
+}
+
 function sanitizeConfigId(value) {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
 }
@@ -906,6 +941,8 @@ function loadConfigById(configId, compactMode = false) {
   const input = $('club-config-id-input');
   if (input) input.value = cleanId;
   updateUrlConfigParam(cleanId);
+  saveRecentConfig(cleanId, config);
+  renderRecentClubs();
   return true;
 }
 
@@ -927,9 +964,11 @@ function saveCurrentConfig() {
     updatedAt: new Date().toISOString(),
   };
   writeSavedConfigs(configs);
+  saveRecentConfig(configId, configs[configId]);
   updateUrlConfigParam(configId);
   if (input) input.value = configId;
   showConfigStatus('Konfiguration gespeichert: ' + configId);
+  renderRecentClubs();
 }
 
 // ===================== Recent Clubs =====================
@@ -954,16 +993,17 @@ function saveRecentClub(club) {
 
 function renderRecentClubs() {
   const container = $('recent-clubs');
-  const list = loadRecentClubs();
-  if (!list.length) { showEl(container, false); return; }
+  const clubs = loadRecentClubs();
+  const recentConfigs = readRecentConfigs();
+  if (!clubs.length && !recentConfigs.length) { showEl(container, false); return; }
   showEl(container, true);
   container.innerHTML =
     '<div class="recent-clubs-head">' +
       '<div class="recent-clubs-label">Zuletzt verwendet:</div>' +
       '<button type="button" class="recent-clubs-reset" id="recent-clubs-reset">zurücksetzen</button>' +
     '</div>' +
-    '<div class="recent-clubs-list">' +
-    list.map(club =>
+    (clubs.length ? '<div class="recent-sub-label">Vereine</div><div class="recent-clubs-list">' +
+    clubs.map(club =>
       '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="' + escapeHtml(club.name) + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
       '<span class="recent-club-logo-wrap">' +
       (club.logoUrl
@@ -972,20 +1012,41 @@ function renderRecentClubs() {
       '</span>' +
       '<span class="recent-club-name">' + escapeHtml(club.name) + '</span>' +
       '</button>'
-    ).join('') +
-    '</div>';
+    ).join('') + '</div>' : '') +
+    (recentConfigs.length ? '<div class="recent-sub-label">Konfigurationen</div><div class="recent-clubs-list recent-configs-list">' +
+      recentConfigs.map(entry =>
+        '<button class="recent-club-btn recent-config-btn" type="button" data-config-id="' + escapeHtml(entry.id) + '" title="Konfiguration ' + escapeHtml(entry.id) + '">' +
+          '<span class="recent-config-id">' + escapeHtml(entry.id) + '</span>' +
+          '<span class="recent-club-name">' + escapeHtml(entry.label || entry.id) + '</span>' +
+        '</button>'
+      ).join('') +
+      '</div>' : '');
   const resetBtn = $('recent-clubs-reset');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
       deleteCookie(COOKIE_RECENT);
+      localStorage.removeItem(RECENT_CONFIGS_KEY);
       clearClub();
       renderRecentClubs();
     });
   }
   container.querySelectorAll('[data-club-id]').forEach(button => {
     button.addEventListener('click', () => {
-      const club = list.find(c => c.id === button.dataset.clubId);
+      const club = clubs.find(c => c.id === button.dataset.clubId);
       if (club) selectClub(club);
+    });
+  });
+  container.querySelectorAll('[data-config-id]').forEach(button => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.configId || '';
+      const ok = loadConfigById(id, true);
+      if (!ok) {
+        showConfigStatus('Konfiguration "' + id + '" wurde nicht gefunden.', true);
+      } else {
+        showConfigStatus('Konfiguration geladen: ' + id);
+        jumpToCalendar();
+        autoLoadGames();
+      }
     });
   });
 }
@@ -1620,6 +1681,7 @@ function renderVenueCheckboxes() {
   const emptyEl   = $('venues-empty');
   const cbEl      = $('venues-checkboxes');
   const errEl     = $('venues-error');
+  const wrapEl    = $('venues-selection-inline');
 
   showEl(loadingEl, false);
   showEl(errEl, false);
@@ -1627,19 +1689,20 @@ function renderVenueCheckboxes() {
   if (!state.club || !state.club.id) {
     emptyEl.textContent = 'Bitte zuerst einen Verein auswählen.';
     showEl(emptyEl, true);
-    showEl(cbEl, false);
+    showEl(wrapEl, false);
     return;
   }
 
   if (!state.venues.length) {
     emptyEl.textContent = 'Keine Spielstätten gefunden.';
     showEl(emptyEl, true);
-    showEl(cbEl, false);
+    showEl(wrapEl, false);
     return;
   }
 
   showEl(emptyEl, false);
-  showEl(cbEl, true);
+  showEl(wrapEl, true);
+  wrapEl.classList.toggle('venues-selection-inline--compact', state.view === 'month');
 
   const MAPS_BASE = 'https://www.google.com/maps/search/?api=1&query=';
 
@@ -1691,6 +1754,7 @@ function renderCurrentView() {
     state.currentMonth = new Date(t.getFullYear(), t.getMonth(), 1);
   }
   updateDatePicker();
+  renderVenueCheckboxes();
   if (state.view === 'week') {
     renderWeekView();
     showEl($('week-view'), true);
@@ -1727,13 +1791,19 @@ function renderWeekView() {
   });
 
   const visibleVenues = getVisibleVenues();
-  if (!state.games.length || !visibleVenues.length) {
+  if (!visibleVenues.length) {
     showEl($('no-games-msg'), true);
     showEl($('week-view'), false);
     return;
   }
 
-  showEl($('no-games-msg'), false);
+  const hasWeekGames = state.games.some(game => {
+    const vid = deriveVenueId(game);
+    if (!visibleVenues.find(v => v.id === vid)) return false;
+    const d = new Date(game.startDate);
+    return d >= weekStart && d <= weekEnd;
+  });
+  showEl($('no-games-msg'), !hasWeekGames);
 
   const weekGames = [];
 
@@ -1818,7 +1888,8 @@ function renderMonthView() {
   const listEl = $('month-list');
   listEl.innerHTML = '';
 
-  const visibleIds = new Set(getVisibleVenues().map(v => v.id));
+  const visibleVenues = getVisibleVenues();
+  const visibleIds = new Set(visibleVenues.map(v => v.id));
 
   const monthGames = state.games
     .filter(g => {
@@ -1833,7 +1904,10 @@ function renderMonthView() {
 
   if (!monthGames.length) {
     showEl($('no-games-msg'), true);
-    showEl($('month-view'), false);
+    const emptyMonth = document.createElement('div');
+    emptyMonth.className = 'empty-msg';
+    emptyMonth.textContent = 'Im gewählten Monat gibt es keine Termine auf den ausgewählten Spielstätten.';
+    listEl.appendChild(emptyMonth);
     return;
   }
 

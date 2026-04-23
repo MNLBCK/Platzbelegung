@@ -535,6 +535,12 @@ main {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+.recent-sub-label {
+  font-size: 0.72rem;
+  color: var(--text-light);
+  margin: 0.2rem 0 0.35rem;
+  font-weight: 600;
+}
 .recent-clubs-reset {
   border: none;
   background: none;
@@ -602,6 +608,18 @@ main {
   white-space: nowrap;
   width: 100%;
 }
+.recent-config-btn {
+  align-items: flex-start;
+  min-width: 98px;
+  max-width: 160px;
+  padding: 0.45rem 0.55rem;
+}
+.recent-config-id {
+  font-size: 0.68rem;
+  color: var(--primary-d);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
 
 .selected-club-info {
   margin-top: 0.8rem;
@@ -655,6 +673,22 @@ main {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+.config-actions-subtle {
+  margin-top: 0.7rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px dashed #c9d6e8;
+  border-radius: 9px;
+  background: #f8fbff;
+}
+.btn-quiet {
+  background: #eef3fb;
+  color: #4e617d;
+  border: 1px solid #d2deee;
+}
+.btn-quiet:hover {
+  background: #e3ecfa;
+  color: #2f4b72;
 }
 
 .config-id-input {
@@ -1116,6 +1150,36 @@ main {
 }
 .view-controls .btn {
   flex: 0 0 auto;
+}
+.venues-selection-inline {
+  margin: 0.55rem 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem 0.55rem;
+  background: #f9fcff;
+}
+.venues-selection-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.35rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.venues-selection-title {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--primary-d);
+}
+.venues-selection-hint {
+  font-size: 0.72rem;
+  color: var(--text-light);
+}
+.venues-selection-inline--compact .venue-full-name {
+  display: none;
+}
+.venues-selection-inline--compact .venue-checkbox-item {
+  padding: 0.22rem 0.4rem;
 }
 .nav-controls {
   display: flex;

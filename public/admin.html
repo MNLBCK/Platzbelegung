@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Platzbelegung – Admin</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f5f7fb; color: #122; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .card { background: #fff; border: 1px solid #dbe3f0; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+    h1, h2 { margin: 0 0 12px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    input, button { padding: 10px 12px; border-radius: 8px; border: 1px solid #b8c7e0; font: inherit; }
+    input { min-width: 280px; }
+    button { background: #1f63ff; color: white; border: none; cursor: pointer; }
+    button:hover { background: #154ed0; }
+    .muted { color: #567; font-size: 14px; }
+    .error { color: #b00020; margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e4eaf5; font-size: 14px; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Admin Dashboard</h1>
+    <div class="card">
+      <h2>Login</h2>
+      <div class="row">
+        <input id="password" type="password" placeholder="Admin-Passwort" />
+        <button id="load">Daten laden</button>
+      </div>
+      <div class="muted">Verwendet das gleiche Passwort wie <code>/api/admin/club-parse-stats</code>.</div>
+      <div id="error" class="error"></div>
+    </div>
+
+    <div id="content" style="display:none">
+      <div class="card">
+        <h2>Statistik</h2>
+        <div id="stats-meta" class="muted"></div>
+        <table>
+          <thead><tr><th>Verein</th><th>ID</th><th>Parses</th><th>Zuletzt</th></tr></thead>
+          <tbody id="stats-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Page Hits</h2>
+        <div id="hits-meta" class="muted"></div>
+        <table>
+          <thead><tr><th>Pfad</th><th>Hits</th></tr></thead>
+          <tbody id="hits-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Gespeicherte Konfiguration</h2>
+        <pre id="config-json"></pre>
+      </div>
+    </div>
+  </div>
+  <script src="/admin.js"></script>
+</body>
+</html>
