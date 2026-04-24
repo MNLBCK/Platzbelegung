@@ -113,6 +113,13 @@ function showEl(el, show = true) {
 
 function showLoading(on) { showEl($('loading-indicator'), on); }
 
+function getClubLogoUrl(club) {
+  const raw = String((club && (club.logoUrl || club.logo)) || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('//')) return 'https:' + raw;
+  return raw;
+}
+
 function showError(msg) {
   const el = $('error-msg');
   el.textContent = msg;
@@ -779,8 +786,8 @@ function renderCompactClubSelection() {
     return;
   }
   logosEl.innerHTML = allClubs.map(club => (
-    club.logoUrl
-      ? '<img class="selected-club-compact-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || club.id) + '" title="' + escapeHtml(club.name || club.id) + '" loading="lazy">'
+    getClubLogoUrl(club)
+      ? '<img class="selected-club-compact-logo" src="' + escapeHtml(getClubLogoUrl(club)) + '" alt="' + escapeHtml(club.name || club.id) + '" title="' + escapeHtml(club.name || club.id) + '" loading="lazy" referrerpolicy="no-referrer">'
       : '<span class="selected-club-compact-fallback" title="' + escapeHtml(club.name || club.id) + '">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>'
   )).join('');
   showEl(compactEl, true);
@@ -869,13 +876,13 @@ function saveRecentConfig(configId, configData) {
   if (configData && configData.club) clubs.push({
     id: configData.club.id || '',
     name: configData.club.name || configData.club.id || '',
-    logoUrl: configData.club.logoUrl || '',
+    logoUrl: getClubLogoUrl(configData.club),
   });
   if (configData && Array.isArray(configData.additionalClubs)) {
     configData.additionalClubs.forEach(c => clubs.push({
       id: c.id || '',
       name: c.name || c.id || '',
-      logoUrl: c.logoUrl || '',
+      logoUrl: getClubLogoUrl(c),
     }));
   }
   const label = clubs.map(c => c.name).filter(Boolean).slice(0, 2).join(' + ') || cleanId;
@@ -1024,7 +1031,7 @@ function renderRecentClubs() {
           const configClubs = Array.isArray(entry.clubs) ? entry.clubs : [];
           const logosHtml = configClubs.map(club => (
             club.logoUrl
-              ? '<img class="recent-config-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || club.id || '') + '" loading="lazy">'
+              ? '<img class="recent-config-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || club.id || '') + '" loading="lazy" referrerpolicy="no-referrer">'
               : '<span class="recent-config-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>'
           )).join('');
           return (
@@ -1039,8 +1046,8 @@ function renderRecentClubs() {
         return (
           '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id || '') + '" title="' + escapeHtml(club.name || '') + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
             '<span class="recent-club-logo-wrap">' +
-            (club.logoUrl
-              ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || '') + '" loading="lazy">'
+            (getClubLogoUrl(club)
+              ? '<img class="recent-club-logo" src="' + escapeHtml(getClubLogoUrl(club)) + '" alt="' + escapeHtml(club.name || '') + '" loading="lazy" referrerpolicy="no-referrer">'
               : '<span class="recent-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>') +
             '</span>' +
             '<span class="recent-club-name">' + escapeHtml(club.name || '') + '</span>' +
@@ -1123,8 +1130,8 @@ function renderSelectedClub() {
   const allClubs = getAllClubs();
   const label = allClubs.length > 1 ? 'Ausgewählte Vereine' : 'Ausgewählter Verein';
   const cardsHtml = allClubs.map(c => {
-    const logoHtml = c.logoUrl
-      ? '<img class="selected-club-logo" src="' + escapeHtml(c.logoUrl) + '" alt="' + escapeHtml(c.name) + '" loading="lazy">'
+    const logoHtml = getClubLogoUrl(c)
+      ? '<img class="selected-club-logo" src="' + escapeHtml(getClubLogoUrl(c)) + '" alt="' + escapeHtml(c.name) + '" loading="lazy" referrerpolicy="no-referrer">'
       : '<span class="selected-club-logo-fallback">' + escapeHtml((c.name || '?').charAt(0).toUpperCase()) + '</span>';
     const clubUrl = getClubUrl(c);
     const removeBtn = '<button class="sg-remove-club-btn" data-club-id="' + escapeHtml(c.id) + '" title="Verein entfernen" aria-label="Verein entfernen">\u00d7</button>';

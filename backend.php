@@ -351,9 +351,9 @@ function normalizeSharedConfigPayload(array $payload): array
     if ($clubName !== '') {
         $outClub['name'] = $clubName;
     }
-    $clubLogoUrl = trim((string)($club['logoUrl'] ?? ''));
+    $clubLogoUrl = trim((string)($club['logoUrl'] ?? $club['logo'] ?? ''));
     if ($clubLogoUrl !== '') {
-        $outClub['logoUrl'] = $clubLogoUrl;
+        $outClub['logoUrl'] = toAbsoluteUrl($clubLogoUrl);
     }
     $clubLocation = normalizeText((string)($club['location'] ?? ''));
     if ($clubLocation !== '') {
@@ -368,8 +368,8 @@ function normalizeSharedConfigPayload(array $payload): array
         $entry = ['id' => $id];
         $name = normalizeText((string)($item['name'] ?? ''));
         if ($name !== '') $entry['name'] = $name;
-        $logoUrl = trim((string)($item['logoUrl'] ?? ''));
-        if ($logoUrl !== '') $entry['logoUrl'] = $logoUrl;
+        $logoUrl = trim((string)($item['logoUrl'] ?? $item['logo'] ?? ''));
+        if ($logoUrl !== '') $entry['logoUrl'] = toAbsoluteUrl($logoUrl);
         $location = normalizeText((string)($item['location'] ?? ''));
         if ($location !== '') $entry['location'] = $location;
         $additionalClubs[] = $entry;
