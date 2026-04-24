@@ -1,8 +1,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
-  let showAllHits = false;
   let statsLimit = 10;
-  const SAVED_CONFIGS_KEY = 'pb_saved_configs_v1';
+  let sharedConfigs = [];
 
   function buildClubUrl(club) {
     const id = String(club && club.id || '').trim();
@@ -15,17 +14,6 @@
     return url.toString();
   }
 
-  function readSavedConfigs() {
-    try {
-      const raw = window.localStorage.getItem(SAVED_CONFIGS_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (_) {
-      return {};
-    }
-  }
-
   function fmt(value) {
     if (!value) return '-';
     const d = new Date(value);
@@ -36,15 +24,22 @@
     $('error').textContent = msg || '';
   }
 
-  function renderStats(stats, hits) {
+  function configClubLabel(cfg) {
+    const names = [];
+    if (cfg.club && (cfg.club.name || cfg.club.id)) names.push(cfg.club.name || cfg.club.id);
+    if (Array.isArray(cfg.additionalClubs)) {
+      cfg.additionalClubs.forEach((club) => {
+        if (club && (club.name || club.id)) names.push(club.name || club.id);
+      });
+    }
+    return names.slice(0, 2).join(' + ');
+  }
+
+  function renderStats(stats) {
     const body = $('stats-body');
     body.innerHTML = '';
     const clubs = stats.clubs || [];
     const totalParses = clubs.reduce((sum, club) => sum + Number(club.parses || 0), 0);
-    const configHits = parseConfigHits((hits && hits.paths) || []);
-    const savedConfigs = readSavedConfigs();
-    const savedConfigIds = Object.keys(savedConfigs);
-    const mergedConfigIds = Array.from(new Set(savedConfigIds.concat(configHits.map(c => c.configId)))).sort();
 
     const clubRows = clubs.map((club) => {
       const tr = document.createElement('tr');
@@ -78,87 +73,135 @@
       return { activity: Number(club.parses || 0), row: tr };
     });
 
-    const filterRows = mergedConfigIds.map((configId) => {
-      const tr = document.createElement('tr');
-
-      const entryCell = document.createElement('td');
-      const link = document.createElement('a');
-      link.href = '/?config=' + encodeURIComponent(configId);
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = configId;
-      entryCell.appendChild(link);
-
-      const cfg = savedConfigs[configId] || {};
-      const clubNames = [];
-      if (cfg.club && (cfg.club.name || cfg.club.id)) clubNames.push(cfg.club.name || cfg.club.id);
-      if (Array.isArray(cfg.additionalClubs)) {
-        cfg.additionalClubs.forEach((c) => clubNames.push((c && (c.name || c.id)) || ''));
-      }
-      if (clubNames.filter(Boolean).length) {
-        const hint = document.createElement('span');
-        hint.style.marginLeft = '6px';
-        hint.textContent = '· ' + clubNames.filter(Boolean).join(' + ');
-        entryCell.appendChild(hint);
-      }
-
-      const hit = configHits.find((row) => row.configId === configId);
-      const activityCell = document.createElement('td');
-      activityCell.textContent = String(hit ? hit.hits : 0) + ' Aufrufe';
-
-      const trainingCell = document.createElement('td');
-      trainingCell.textContent = '-';
-
-      const lastCell = document.createElement('td');
-      lastCell.textContent = fmt(cfg.updatedAt || null);
-
-      tr.appendChild(entryCell);
-      tr.appendChild(activityCell);
-      tr.appendChild(trainingCell);
-      tr.appendChild(lastCell);
-      return { activity: Number(hit ? hit.hits : 0), row: tr };
-    });
-
-    const appendGroup = (items, addSeparator = false) => {
-      const sorted = items.sort((a, b) => b.activity - a.activity).slice(0, statsLimit);
-      sorted.forEach((item, idx) => {
-        if (addSeparator && idx === 0) item.row.classList.add('group-sep');
-        body.appendChild(item.row);
-      });
-    };
-
-    appendGroup(clubRows);
-    appendGroup(filterRows, true);
+    const sorted = clubRows.sort((a, b) => b.activity - a.activity).slice(0, statsLimit);
+    sorted.forEach((item) => body.appendChild(item.row));
 
     const training = stats.training || {};
     $('kpi-parses').textContent = String(totalParses);
     $('kpi-clubs').textContent = String(stats.totalClubs || clubs.length || 0);
-    $('kpi-filters').textContent = String(mergedConfigIds.length);
+    $('kpi-filters').textContent = String(sharedConfigs.length);
     $('kpi-training-requests').textContent = String(training.pendingRequests || 0);
     $('kpi-training-parsed').textContent = String(training.parsedSessions || 0);
-
   }
 
-  function parseConfigHits(paths) {
-    const counts = new Map();
-    (paths || []).forEach((row) => {
-      const rawPath = String(row.path || '');
-      const hits = Number(row.hits || 0);
-      let url;
-      try {
-        url = new URL(rawPath, window.location.origin);
-      } catch (e) {
+  function renderSharedConfigsTable() {
+    const body = $('shared-configs-body');
+    body.innerHTML = '';
+
+    if (!sharedConfigs.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 6;
+      td.textContent = 'Keine serverseitig gespeicherten Konfigurationen.';
+      tr.appendChild(td);
+      body.appendChild(tr);
+      return;
+    }
+
+    sharedConfigs.forEach((cfg) => {
+      const tr = document.createElement('tr');
+
+      const idCell = document.createElement('td');
+      const link = document.createElement('a');
+      link.href = '/?config=' + encodeURIComponent(cfg.id);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = cfg.id;
+      idCell.appendChild(link);
+
+      const labelCell = document.createElement('td');
+      labelCell.textContent = cfg.label || configClubLabel(cfg) || '-';
+
+      const clubsCell = document.createElement('td');
+      clubsCell.textContent = configClubLabel(cfg) || '-';
+
+      const hitsCell = document.createElement('td');
+      hitsCell.textContent = String(cfg.hits || 0);
+
+      const updatedCell = document.createElement('td');
+      updatedCell.textContent = fmt(cfg.updatedAt);
+
+      const actionsCell = document.createElement('td');
+      const renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'btn-secondary';
+      renameBtn.textContent = 'Umbenennen';
+      renameBtn.addEventListener('click', () => renameConfig(cfg));
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'btn-danger';
+      deleteBtn.textContent = 'Löschen';
+      deleteBtn.style.marginLeft = '6px';
+      deleteBtn.addEventListener('click', () => deleteConfig(cfg));
+
+      actionsCell.appendChild(renameBtn);
+      actionsCell.appendChild(deleteBtn);
+
+      tr.appendChild(idCell);
+      tr.appendChild(labelCell);
+      tr.appendChild(clubsCell);
+      tr.appendChild(hitsCell);
+      tr.appendChild(updatedCell);
+      tr.appendChild(actionsCell);
+      body.appendChild(tr);
+    });
+  }
+
+  async function renameConfig(cfg) {
+    const password = $('password').value.trim();
+    if (!password) {
+      setError('Bitte Passwort eingeben.');
+      return;
+    }
+    const current = cfg.label || configClubLabel(cfg) || cfg.id;
+    const nextLabel = window.prompt('Neues Label für ' + cfg.id, current);
+    if (nextLabel === null) return;
+    const clean = String(nextLabel).trim();
+    if (!clean) {
+      setError('Label darf nicht leer sein.');
+      return;
+    }
+    try {
+      const resp = await fetch('/api/admin/shared-config?id=' + encodeURIComponent(cfg.id) + '&password=' + encodeURIComponent(password), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: clean }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setError(data.error || 'Umbenennen fehlgeschlagen.');
         return;
       }
-      const configId = (url.searchParams.get('config') || '').trim();
-      if (!configId) return;
-      counts.set(configId, (counts.get(configId) || 0) + hits);
-    });
-    return Array.from(counts.entries())
-      .map(([configId, hits]) => ({ configId, hits }))
-      .sort((a, b) => b.hits - a.hits || a.configId.localeCompare(b.configId));
+      await loadDashboard();
+    } catch (e) {
+      setError('Netzwerkfehler beim Umbenennen.');
+    }
   }
 
+  async function deleteConfig(cfg) {
+    const password = $('password').value.trim();
+    if (!password) {
+      setError('Bitte Passwort eingeben.');
+      return;
+    }
+    if (!window.confirm('Konfiguration ' + cfg.id + ' wirklich löschen?')) {
+      return;
+    }
+    try {
+      const resp = await fetch('/api/admin/shared-config?id=' + encodeURIComponent(cfg.id) + '&password=' + encodeURIComponent(password), {
+        method: 'DELETE',
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setError(data.error || 'Löschen fehlgeschlagen.');
+        return;
+      }
+      await loadDashboard();
+    } catch (e) {
+      setError('Netzwerkfehler beim Löschen.');
+    }
+  }
 
   async function loadDashboard() {
     const password = $('password').value.trim();
@@ -190,7 +233,9 @@
       return;
     }
 
+    sharedConfigs = Array.isArray(data.sharedConfigs) ? data.sharedConfigs : [];
     renderStats(data.stats || {});
+    renderSharedConfigsTable();
     $('config-json').textContent = JSON.stringify(data.config || {}, null, 2);
     $('content').style.display = 'block';
   }
@@ -199,6 +244,7 @@
   if (statsLimitEl) {
     statsLimitEl.addEventListener('change', () => {
       statsLimit = Number(statsLimitEl.value || 10);
+      renderStats({ clubs: [], training: {} });
       $('load').click();
     });
   }

@@ -55,7 +55,6 @@ const COOKIE_RECENT       = 'pb_recent';
 const COOKIE_VENUES       = 'pb_venues';
 const COOKIE_VIEW         = 'pb_view';
 const COOKIE_EXTRA_CLUBS  = 'pb_extra_clubs';
-const SAVED_CONFIGS_KEY   = 'pb_saved_configs_v1';
 const RECENT_CONFIGS_KEY  = 'pb_recent_configs_v1';
 const URL_CONFIG_PARAM    = 'config';
 
@@ -836,21 +835,13 @@ function saveVenuesCookie() {
 
 // ===================== Saved Club Configurations =====================
 
-function readSavedConfigs() {
-  try {
-    const raw = localStorage.getItem(SAVED_CONFIGS_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch (_) {
-    return {};
-  }
-}
-
-function writeSavedConfigs(configs) {
-  try {
-    localStorage.setItem(SAVED_CONFIGS_KEY, JSON.stringify(configs || {}));
-  } catch (_) {}
+async function fetchSharedConfig(configId) {
+  const cleanId = sanitizeConfigId(configId);
+  if (!cleanId) return null;
+  const resp = await fetch('/api/shared-config?id=' + encodeURIComponent(cleanId));
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) return null;
+  return data;
 }
 
 function readRecentConfigs() {
@@ -890,13 +881,6 @@ function saveRecentConfig(configId, configData) {
 
 function sanitizeConfigId(value) {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
-}
-
-function generateConfigId() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for (let i = 0; i < 6; i += 1) out += chars.charAt(Math.floor(Math.random() * chars.length));
-  return out;
 }
 
 function updateUrlConfigParam(configId) {
@@ -939,11 +923,10 @@ function applyClubConfig(configId, config, compactMode = false) {
   return true;
 }
 
-function loadConfigById(configId, compactMode = false) {
+async function loadConfigById(configId, compactMode = false) {
   const cleanId = sanitizeConfigId(configId);
   if (!cleanId) return false;
-  const configs = readSavedConfigs();
-  const config = configs[cleanId];
+  const config = await fetchSharedConfig(cleanId);
   if (!config) return false;
   const applied = applyClubConfig(cleanId, config, compactMode);
   if (!applied) return false;
@@ -955,29 +938,40 @@ function loadConfigById(configId, compactMode = false) {
   return true;
 }
 
-function saveCurrentConfig() {
+async function saveCurrentConfig() {
   const allClubs = getAllClubs();
   if (!allClubs.length) {
     showConfigStatus('Bitte zuerst mindestens einen Verein auswählen.', true);
     return;
   }
   const input = $('club-config-id-input');
-  let configId = sanitizeConfigId(input ? input.value : '');
-  const configs = readSavedConfigs();
-  if (!configId) {
-    do { configId = generateConfigId(); } while (configs[configId]);
+  const configId = sanitizeConfigId(input ? input.value : '');
+  try {
+    const resp = await fetch('/api/shared-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: configId || null,
+        club: state.club,
+        additionalClubs: state.additionalClubs,
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.id) {
+      showConfigStatus(data.error || 'Konfiguration konnte nicht gespeichert werden.', true);
+      return;
+    }
+    saveRecentConfig(data.id, data.config || {
+      club: state.club,
+      additionalClubs: state.additionalClubs,
+    });
+    updateUrlConfigParam(data.id);
+    if (input) input.value = data.id;
+    showConfigStatus('Konfiguration gespeichert: ' + data.id);
+    renderRecentClubs();
+  } catch (e) {
+    showConfigStatus('Netzwerkfehler beim Speichern.', true);
   }
-  configs[configId] = {
-    club: state.club,
-    additionalClubs: state.additionalClubs,
-    updatedAt: new Date().toISOString(),
-  };
-  writeSavedConfigs(configs);
-  saveRecentConfig(configId, configs[configId]);
-  updateUrlConfigParam(configId);
-  if (input) input.value = configId;
-  showConfigStatus('Konfiguration gespeichert: ' + configId);
-  renderRecentClubs();
 }
 
 // ===================== Recent Clubs =====================
@@ -1054,9 +1048,9 @@ function renderRecentClubs() {
     });
   });
   container.querySelectorAll('[data-config-id]').forEach(button => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const id = button.dataset.configId || '';
-      const ok = loadConfigById(id, true);
+      const ok = await loadConfigById(id, true);
       if (!ok) {
         showConfigStatus('Konfiguration "' + id + '" wurde nicht gefunden.', true);
       } else {
@@ -2163,7 +2157,7 @@ function bindEvents() {
         return;
       }
       showConfigStatus('');
-      const ok = loadConfigById(configId, true);
+      const ok = await loadConfigById(configId, true);
       if (!ok) {
         showConfigStatus('Keine Konfiguration mit ID "' + configId + '" gefunden.', true);
         return;
@@ -2249,7 +2243,7 @@ async function init() {
   const requestedConfigId = sanitizeConfigId(new URLSearchParams(window.location.search).get(URL_CONFIG_PARAM) || '');
   let loadedViaClubParam = false;
   if (requestedConfigId) {
-    if (!loadConfigById(requestedConfigId, true)) {
+    if (!(await loadConfigById(requestedConfigId, true))) {
       showConfigStatus('Konfiguration "' + requestedConfigId + '" wurde nicht gefunden.', true);
       updateUrlConfigParam('');
     }

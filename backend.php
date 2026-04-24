@@ -9,6 +9,7 @@ const CONFIG_FILE = __DIR__ . '/config.yaml';
 const VERSION_FILE = __DIR__ . '/VERSION';
 const BUILD_META_FILE = __DIR__ . '/BUILD_META.json';
 const USAGE_STATS_FILE = DATA_DIR . '/club_parse_stats.json';
+const SHARED_CONFIGS_FILE = DATA_DIR . '/shared_configs.json';
 const STATS_PASSWORD_FILE = __DIR__ . '/.stats_password';
 const APP_REPOSITORY_URL = 'https://github.com/MNLBCK/Platzbelegung';
 const APP_RELEASES_URL = APP_REPOSITORY_URL . '/releases/tag/';
@@ -287,6 +288,111 @@ function saveUsageStats(array $stats): bool
         return false;
     }
     return file_put_contents(USAGE_STATS_FILE, $json . PHP_EOL, LOCK_EX) !== false;
+}
+
+function sanitizeSharedConfigId(string $value): string
+{
+    $value = strtoupper(trim($value));
+    $value = preg_replace('/[^A-Z0-9]/', '', $value) ?? '';
+    return substr($value, 0, 12);
+}
+
+function generateSharedConfigId(array $existing): string
+{
+    $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for ($attempt = 0; $attempt < 20; $attempt += 1) {
+        $id = '';
+        for ($i = 0; $i < 6; $i += 1) {
+            $id .= $chars[random_int(0, strlen($chars) - 1)];
+        }
+        if (!isset($existing[$id])) {
+            return $id;
+        }
+    }
+    return strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+}
+
+function loadSharedConfigsStore(): array
+{
+    if (!is_file(SHARED_CONFIGS_FILE)) {
+        return ['updatedAt' => null, 'configs' => []];
+    }
+    $raw = file_get_contents(SHARED_CONFIGS_FILE);
+    if ($raw === false) {
+        return ['updatedAt' => null, 'configs' => []];
+    }
+    $parsed = json_decode($raw, true);
+    if (!is_array($parsed)) {
+        return ['updatedAt' => null, 'configs' => []];
+    }
+    $configs = is_array($parsed['configs'] ?? null) ? $parsed['configs'] : [];
+    return ['updatedAt' => $parsed['updatedAt'] ?? null, 'configs' => $configs];
+}
+
+function saveSharedConfigsStore(array $store): bool
+{
+    if (!is_dir(DATA_DIR) && !mkdir(DATA_DIR, 0775, true) && !is_dir(DATA_DIR)) {
+        return false;
+    }
+    $store['updatedAt'] = gmdate(DATE_ATOM);
+    $json = json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+    return file_put_contents(SHARED_CONFIGS_FILE, $json . PHP_EOL, LOCK_EX) !== false;
+}
+
+function normalizeSharedConfigPayload(array $payload): array
+{
+    $club = is_array($payload['club'] ?? null) ? $payload['club'] : [];
+    $clubId = trim((string)($club['id'] ?? ''));
+    $outClub = ['id' => $clubId];
+    $clubName = normalizeText((string)($club['name'] ?? ''));
+    if ($clubName !== '') {
+        $outClub['name'] = $clubName;
+    }
+
+    $additionalClubs = [];
+    foreach (($payload['additionalClubs'] ?? []) as $item) {
+        if (!is_array($item)) continue;
+        $id = trim((string)($item['id'] ?? ''));
+        if ($id === '') continue;
+        $entry = ['id' => $id];
+        $name = normalizeText((string)($item['name'] ?? ''));
+        if ($name !== '') $entry['name'] = $name;
+        $additionalClubs[] = $entry;
+    }
+
+    $label = normalizeText((string)($payload['label'] ?? ''));
+
+    return [
+        'club' => $outClub,
+        'additionalClubs' => $additionalClubs,
+        'label' => $label,
+    ];
+}
+
+function listSharedConfigsForAdmin(): array
+{
+    $store = loadSharedConfigsStore();
+    $rows = [];
+    foreach (($store['configs'] ?? []) as $id => $config) {
+        if (!is_array($config)) continue;
+        $rows[] = [
+            'id' => sanitizeSharedConfigId((string)$id),
+            'label' => (string)($config['label'] ?? ''),
+            'club' => is_array($config['club'] ?? null) ? $config['club'] : (object)[],
+            'additionalClubs' => is_array($config['additionalClubs'] ?? null) ? array_values($config['additionalClubs']) : [],
+            'updatedAt' => $config['updatedAt'] ?? null,
+            'createdAt' => $config['createdAt'] ?? null,
+            'hits' => (int)($config['hits'] ?? 0),
+            'lastAccessedAt' => $config['lastAccessedAt'] ?? null,
+        ];
+    }
+    usort($rows, static function (array $a, array $b): int {
+        return strcmp((string)($b['updatedAt'] ?? ''), (string)($a['updatedAt'] ?? ''));
+    });
+    return $rows;
 }
 
 function recordClubParse(string $clubId, string $clubName = '', string $clubLogoUrl = '', string $clubLocation = ''): void
@@ -998,6 +1104,44 @@ if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/'))
             'stats' => buildStatsResponse(loadUsageStats()),
             'config' => $config === null ? null : $config,
             'configAvailable' => $config !== null,
+            'sharedConfigs' => listSharedConfigsForAdmin(),
+        ]);
+        return;
+    }
+
+    if ($uri === '/api/admin/shared-configs') {
+        $providedPassword = (string)($query['password'] ?? '');
+        $authError = ensureStatsPasswordAuthorized($providedPassword);
+        if ($authError !== null) {
+            jsonResponse(['error' => $authError['error']], (int)$authError['status']);
+            return;
+        }
+        jsonResponse(['configs' => listSharedConfigsForAdmin()]);
+        return;
+    }
+
+    if ($uri === '/api/shared-config') {
+        $id = sanitizeSharedConfigId((string)($query['id'] ?? ''));
+        if ($id === '') {
+            jsonResponse(['error' => 'Konfigurations-ID erforderlich.'], 400);
+            return;
+        }
+        $store = loadSharedConfigsStore();
+        $config = $store['configs'][$id] ?? null;
+        if (!is_array($config)) {
+            jsonResponse(['error' => 'Konfiguration nicht gefunden.'], 404);
+            return;
+        }
+        $config['hits'] = ((int)($config['hits'] ?? 0)) + 1;
+        $config['lastAccessedAt'] = gmdate(DATE_ATOM);
+        $store['configs'][$id] = $config;
+        saveSharedConfigsStore($store);
+        jsonResponse([
+            'id' => $id,
+            'label' => (string)($config['label'] ?? ''),
+            'club' => is_array($config['club'] ?? null) ? $config['club'] : (object)[],
+            'additionalClubs' => is_array($config['additionalClubs'] ?? null) ? array_values($config['additionalClubs']) : [],
+            'updatedAt' => $config['updatedAt'] ?? null,
         ]);
         return;
     }
@@ -1067,6 +1211,111 @@ if ($method === 'PUT' && $uri === '/api/config/venues') {
     }, $venues);
     if (!saveConfig($config)) { jsonResponse(['error' => 'Konfiguration konnte nicht gespeichert werden.'], 500); return; }
     jsonResponse(['ok' => true, 'venues' => $config['venues']]);
+    return;
+}
+
+if ($method === 'POST' && $uri === '/api/shared-config') {
+    $body = getJsonBody();
+    $payload = normalizeSharedConfigPayload($body);
+    $clubId = trim((string)($payload['club']['id'] ?? ''));
+    if ($clubId === '') {
+        jsonResponse(['error' => 'Mindestens ein Verein ist erforderlich.'], 400);
+        return;
+    }
+    $store = loadSharedConfigsStore();
+    $configs = is_array($store['configs'] ?? null) ? $store['configs'] : [];
+    $id = sanitizeSharedConfigId((string)($body['id'] ?? ''));
+    if ($id === '') {
+        $id = generateSharedConfigId($configs);
+    }
+    $now = gmdate(DATE_ATOM);
+    $existing = is_array($configs[$id] ?? null) ? $configs[$id] : [];
+    $label = trim((string)($payload['label'] ?? ''));
+    if ($label === '') {
+        $labelCandidates = [];
+        $labelCandidates[] = (string)($payload['club']['name'] ?? $payload['club']['id'] ?? '');
+        foreach (($payload['additionalClubs'] ?? []) as $club) {
+            if (!is_array($club)) continue;
+            $labelCandidates[] = (string)($club['name'] ?? $club['id'] ?? '');
+        }
+        $label = implode(' + ', array_slice(array_values(array_filter(array_map('trim', $labelCandidates))), 0, 2));
+    }
+    $configs[$id] = [
+        'label' => $label,
+        'club' => $payload['club'],
+        'additionalClubs' => $payload['additionalClubs'],
+        'createdAt' => $existing['createdAt'] ?? $now,
+        'updatedAt' => $now,
+        'hits' => (int)($existing['hits'] ?? 0),
+        'lastAccessedAt' => $existing['lastAccessedAt'] ?? null,
+    ];
+    $store['configs'] = $configs;
+    if (!saveSharedConfigsStore($store)) {
+        jsonResponse(['error' => 'Konfiguration konnte nicht gespeichert werden.'], 500);
+        return;
+    }
+    jsonResponse(['ok' => true, 'id' => $id, 'config' => $configs[$id]]);
+    return;
+}
+
+if ($method === 'PATCH' && $uri === '/api/admin/shared-config') {
+    $providedPassword = (string)($_GET['password'] ?? '');
+    $authError = ensureStatsPasswordAuthorized($providedPassword);
+    if ($authError !== null) {
+        jsonResponse(['error' => $authError['error']], (int)$authError['status']);
+        return;
+    }
+    $id = sanitizeSharedConfigId((string)($_GET['id'] ?? ''));
+    if ($id === '') {
+        jsonResponse(['error' => 'Konfigurations-ID erforderlich.'], 400);
+        return;
+    }
+    $body = getJsonBody();
+    $label = normalizeText((string)($body['label'] ?? ''));
+    if ($label === '') {
+        jsonResponse(['error' => 'Neues Label erforderlich.'], 400);
+        return;
+    }
+    $store = loadSharedConfigsStore();
+    $config = $store['configs'][$id] ?? null;
+    if (!is_array($config)) {
+        jsonResponse(['error' => 'Konfiguration nicht gefunden.'], 404);
+        return;
+    }
+    $config['label'] = $label;
+    $config['updatedAt'] = gmdate(DATE_ATOM);
+    $store['configs'][$id] = $config;
+    if (!saveSharedConfigsStore($store)) {
+        jsonResponse(['error' => 'Konfiguration konnte nicht aktualisiert werden.'], 500);
+        return;
+    }
+    jsonResponse(['ok' => true]);
+    return;
+}
+
+if ($method === 'DELETE' && $uri === '/api/admin/shared-config') {
+    $providedPassword = (string)($_GET['password'] ?? '');
+    $authError = ensureStatsPasswordAuthorized($providedPassword);
+    if ($authError !== null) {
+        jsonResponse(['error' => $authError['error']], (int)$authError['status']);
+        return;
+    }
+    $id = sanitizeSharedConfigId((string)($_GET['id'] ?? ''));
+    if ($id === '') {
+        jsonResponse(['error' => 'Konfigurations-ID erforderlich.'], 400);
+        return;
+    }
+    $store = loadSharedConfigsStore();
+    if (!isset($store['configs'][$id])) {
+        jsonResponse(['error' => 'Konfiguration nicht gefunden.'], 404);
+        return;
+    }
+    unset($store['configs'][$id]);
+    if (!saveSharedConfigsStore($store)) {
+        jsonResponse(['error' => 'Konfiguration konnte nicht gelöscht werden.'], 500);
+        return;
+    }
+    jsonResponse(['ok' => true]);
     return;
 }
 
