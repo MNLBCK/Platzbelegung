@@ -18,6 +18,10 @@
     input { min-width: 280px; }
     button { background: #1f63ff; color: white; border: none; cursor: pointer; }
     button:hover { background: #154ed0; }
+    .btn-secondary { background:#6b7280; }
+    .btn-secondary:hover { background:#4b5563; }
+    .btn-danger { background:#b91c1c; }
+    .btn-danger:hover { background:#991b1b; }
     .muted { color: #567; font-size: 14px; }
     .error { color: #b00020; margin-top: 8px; }
     table { width: 100%; border-collapse: collapse; }
@@ -53,11 +57,11 @@
 
     <div id="content" style="display:none">
       <div class="card">
-        <h2>Vereine &amp; Vereinsfilter</h2>
+        <h2>Vereine</h2>
         <div class="stats-grid">
           <div class="stat-tile"><div class="stat-k">Parses gesamt</div><div class="stat-v" id="kpi-parses">0</div></div>
           <div class="stat-tile"><div class="stat-k">Vereine</div><div class="stat-v" id="kpi-clubs">0</div></div>
-          <div class="stat-tile"><div class="stat-k">Vereinsfilter</div><div class="stat-v" id="kpi-filters">0</div></div>
+          <div class="stat-tile"><div class="stat-k">Server-Konfigurationen</div><div class="stat-v" id="kpi-filters">0</div></div>
           <div class="stat-tile"><div class="stat-k">Offene Trainings-Requests</div><div class="stat-v" id="kpi-training-requests">0</div></div>
           <div class="stat-tile"><div class="stat-k">Geparste Trainingszeiten</div><div class="stat-v" id="kpi-training-parsed">0</div></div>
         </div>
@@ -73,12 +77,14 @@
           <thead><tr><th>Eintrag</th><th>Aktivität</th><th>Training (Req/Parsed)</th><th>Zuletzt</th></tr></thead>
           <tbody id="stats-body"></tbody>
         </table>
-        <div class="muted" style="margin-top:8px;">Vereinsfilter werden browser-lokal gespeichert (<code>localStorage: pb_saved_configs_v1</code>).</div>
       </div>
 
       <div class="card">
-        <h2>Gespeicherte Konfiguration</h2>
-        <pre id="config-json"></pre>
+        <h2>Vereinsfilter (serverseitig)</h2>
+        <table>
+          <thead><tr><th>ID</th><th>Vereine</th><th>Aufrufe</th><th>Zuletzt geändert</th><th>Aktionen</th></tr></thead>
+          <tbody id="shared-configs-body"></tbody>
+        </table>
       </div>
     </div>
   </div>

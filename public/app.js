@@ -55,7 +55,6 @@ const COOKIE_RECENT       = 'pb_recent';
 const COOKIE_VENUES       = 'pb_venues';
 const COOKIE_VIEW         = 'pb_view';
 const COOKIE_EXTRA_CLUBS  = 'pb_extra_clubs';
-const SAVED_CONFIGS_KEY   = 'pb_saved_configs_v1';
 const RECENT_CONFIGS_KEY  = 'pb_recent_configs_v1';
 const URL_CONFIG_PARAM    = 'config';
 
@@ -113,6 +112,19 @@ function showEl(el, show = true) {
 }
 
 function showLoading(on) { showEl($('loading-indicator'), on); }
+
+function getClubLogoUrl(club) {
+  const raw = String((club && (club.logoUrl || club.logo)) || '').trim();
+  if (!raw) {
+    const clubId = String((club && club.id) || '').trim();
+    if (clubId) {
+      return 'https://www.fussball.de/export.media/-/action/getLogo/format/7/id/' + encodeURIComponent(clubId);
+    }
+    return '';
+  }
+  if (raw.startsWith('//')) return 'https:' + raw;
+  return raw;
+}
 
 function showError(msg) {
   const el = $('error-msg');
@@ -780,8 +792,8 @@ function renderCompactClubSelection() {
     return;
   }
   logosEl.innerHTML = allClubs.map(club => (
-    club.logoUrl
-      ? '<img class="selected-club-compact-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || club.id) + '" title="' + escapeHtml(club.name || club.id) + '" loading="lazy">'
+    getClubLogoUrl(club)
+      ? '<img class="selected-club-compact-logo" src="' + escapeHtml(getClubLogoUrl(club)) + '" alt="' + escapeHtml(club.name || club.id) + '" title="' + escapeHtml(club.name || club.id) + '" loading="lazy" referrerpolicy="no-referrer">'
       : '<span class="selected-club-compact-fallback" title="' + escapeHtml(club.name || club.id) + '">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>'
   )).join('');
   showEl(compactEl, true);
@@ -836,21 +848,13 @@ function saveVenuesCookie() {
 
 // ===================== Saved Club Configurations =====================
 
-function readSavedConfigs() {
-  try {
-    const raw = localStorage.getItem(SAVED_CONFIGS_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch (_) {
-    return {};
-  }
-}
-
-function writeSavedConfigs(configs) {
-  try {
-    localStorage.setItem(SAVED_CONFIGS_KEY, JSON.stringify(configs || {}));
-  } catch (_) {}
+async function fetchSharedConfig(configId) {
+  const cleanId = sanitizeConfigId(configId);
+  if (!cleanId) return null;
+  const resp = await fetch('/api/shared-config?id=' + encodeURIComponent(cleanId));
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) return null;
+  return data;
 }
 
 function readRecentConfigs() {
@@ -875,14 +879,23 @@ function saveRecentConfig(configId, configData) {
   if (!cleanId) return;
   const recent = readRecentConfigs().filter(entry => sanitizeConfigId(entry && entry.id) !== cleanId);
   const clubs = [];
-  if (configData && configData.club) clubs.push(configData.club.name || configData.club.id || '');
+  if (configData && configData.club) clubs.push({
+    id: configData.club.id || '',
+    name: configData.club.name || configData.club.id || '',
+    logoUrl: getClubLogoUrl(configData.club),
+  });
   if (configData && Array.isArray(configData.additionalClubs)) {
-    configData.additionalClubs.forEach(c => clubs.push(c.name || c.id || ''));
+    configData.additionalClubs.forEach(c => clubs.push({
+      id: c.id || '',
+      name: c.name || c.id || '',
+      logoUrl: getClubLogoUrl(c),
+    }));
   }
-  const label = clubs.filter(Boolean).slice(0, 2).join(' + ') || cleanId;
+  const label = clubs.map(c => c.name).filter(Boolean).slice(0, 2).join(' + ') || cleanId;
   recent.unshift({
     id: cleanId,
     label,
+    clubs,
     usedAt: new Date().toISOString(),
   });
   writeRecentConfigs(recent.slice(0, 5));
@@ -890,13 +903,6 @@ function saveRecentConfig(configId, configData) {
 
 function sanitizeConfigId(value) {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
-}
-
-function generateConfigId() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for (let i = 0; i < 6; i += 1) out += chars.charAt(Math.floor(Math.random() * chars.length));
-  return out;
 }
 
 function updateUrlConfigParam(configId) {
@@ -939,11 +945,10 @@ function applyClubConfig(configId, config, compactMode = false) {
   return true;
 }
 
-function loadConfigById(configId, compactMode = false) {
+async function loadConfigById(configId, compactMode = false) {
   const cleanId = sanitizeConfigId(configId);
   if (!cleanId) return false;
-  const configs = readSavedConfigs();
-  const config = configs[cleanId];
+  const config = await fetchSharedConfig(cleanId);
   if (!config) return false;
   const applied = applyClubConfig(cleanId, config, compactMode);
   if (!applied) return false;
@@ -955,29 +960,40 @@ function loadConfigById(configId, compactMode = false) {
   return true;
 }
 
-function saveCurrentConfig() {
+async function saveCurrentConfig() {
   const allClubs = getAllClubs();
   if (!allClubs.length) {
     showConfigStatus('Bitte zuerst mindestens einen Verein auswählen.', true);
     return;
   }
   const input = $('club-config-id-input');
-  let configId = sanitizeConfigId(input ? input.value : '');
-  const configs = readSavedConfigs();
-  if (!configId) {
-    do { configId = generateConfigId(); } while (configs[configId]);
+  const configId = sanitizeConfigId(input ? input.value : '');
+  try {
+    const resp = await fetch('/api/shared-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: configId || null,
+        club: state.club,
+        additionalClubs: state.additionalClubs,
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.id) {
+      showConfigStatus(data.error || 'Konfiguration konnte nicht gespeichert werden.', true);
+      return;
+    }
+    saveRecentConfig(data.id, data.config || {
+      club: state.club,
+      additionalClubs: state.additionalClubs,
+    });
+    updateUrlConfigParam(data.id);
+    if (input) input.value = data.id;
+    showConfigStatus('Konfiguration gespeichert: ' + data.id);
+    renderRecentClubs();
+  } catch (e) {
+    showConfigStatus('Netzwerkfehler beim Speichern.', true);
   }
-  configs[configId] = {
-    club: state.club,
-    additionalClubs: state.additionalClubs,
-    updatedAt: new Date().toISOString(),
-  };
-  writeSavedConfigs(configs);
-  saveRecentConfig(configId, configs[configId]);
-  updateUrlConfigParam(configId);
-  if (input) input.value = configId;
-  showConfigStatus('Konfiguration gespeichert: ' + configId);
-  renderRecentClubs();
 }
 
 // ===================== Recent Clubs =====================
@@ -1018,8 +1034,15 @@ function renderRecentClubs() {
       recentItems.map(item => {
         if (item.type === 'config') {
           const entry = item.entry || {};
+          const configClubs = Array.isArray(entry.clubs) ? entry.clubs : [];
+          const logosHtml = configClubs.map(club => (
+            club.logoUrl
+              ? '<img class="recent-config-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || club.id || '') + '" loading="lazy" referrerpolicy="no-referrer">'
+              : '<span class="recent-config-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>'
+          )).join('');
           return (
             '<button class="recent-club-btn recent-config-btn" type="button" data-config-id="' + escapeHtml(entry.id || '') + '" title="Vereinsfilter ' + escapeHtml(entry.id || '') + '">' +
+              '<span class="recent-config-logos">' + logosHtml + '</span>' +
               '<span class="recent-config-id">' + escapeHtml(entry.id || '') + '</span>' +
               '<span class="recent-club-name">' + escapeHtml(entry.label || entry.id || '') + '</span>' +
             '</button>'
@@ -1029,8 +1052,8 @@ function renderRecentClubs() {
         return (
           '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id || '') + '" title="' + escapeHtml(club.name || '') + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
             '<span class="recent-club-logo-wrap">' +
-            (club.logoUrl
-              ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || '') + '" loading="lazy">'
+            (getClubLogoUrl(club)
+              ? '<img class="recent-club-logo" src="' + escapeHtml(getClubLogoUrl(club)) + '" alt="' + escapeHtml(club.name || '') + '" loading="lazy" referrerpolicy="no-referrer">'
               : '<span class="recent-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>') +
             '</span>' +
             '<span class="recent-club-name">' + escapeHtml(club.name || '') + '</span>' +
@@ -1054,9 +1077,9 @@ function renderRecentClubs() {
     });
   });
   container.querySelectorAll('[data-config-id]').forEach(button => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const id = button.dataset.configId || '';
-      const ok = loadConfigById(id, true);
+      const ok = await loadConfigById(id, true);
       if (!ok) {
         showConfigStatus('Konfiguration "' + id + '" wurde nicht gefunden.', true);
       } else {
@@ -1113,8 +1136,8 @@ function renderSelectedClub() {
   const allClubs = getAllClubs();
   const label = allClubs.length > 1 ? 'Ausgewählte Vereine' : 'Ausgewählter Verein';
   const cardsHtml = allClubs.map(c => {
-    const logoHtml = c.logoUrl
-      ? '<img class="selected-club-logo" src="' + escapeHtml(c.logoUrl) + '" alt="' + escapeHtml(c.name) + '" loading="lazy">'
+    const logoHtml = getClubLogoUrl(c)
+      ? '<img class="selected-club-logo" src="' + escapeHtml(getClubLogoUrl(c)) + '" alt="' + escapeHtml(c.name) + '" loading="lazy" referrerpolicy="no-referrer">'
       : '<span class="selected-club-logo-fallback">' + escapeHtml((c.name || '?').charAt(0).toUpperCase()) + '</span>';
     const clubUrl = getClubUrl(c);
     const removeBtn = '<button class="sg-remove-club-btn" data-club-id="' + escapeHtml(c.id) + '" title="Verein entfernen" aria-label="Verein entfernen">\u00d7</button>';
@@ -2163,7 +2186,7 @@ function bindEvents() {
         return;
       }
       showConfigStatus('');
-      const ok = loadConfigById(configId, true);
+      const ok = await loadConfigById(configId, true);
       if (!ok) {
         showConfigStatus('Keine Konfiguration mit ID "' + configId + '" gefunden.', true);
         return;
@@ -2249,7 +2272,7 @@ async function init() {
   const requestedConfigId = sanitizeConfigId(new URLSearchParams(window.location.search).get(URL_CONFIG_PARAM) || '');
   let loadedViaClubParam = false;
   if (requestedConfigId) {
-    if (!loadConfigById(requestedConfigId, true)) {
+    if (!(await loadConfigById(requestedConfigId, true))) {
       showConfigStatus('Konfiguration "' + requestedConfigId + '" wurde nicht gefunden.', true);
       updateUrlConfigParam('');
     }
