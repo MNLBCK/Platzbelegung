@@ -756,6 +756,15 @@ function renderTeamOverview() {
 function updateSectionVisibility() {
   const hasClub = !!(state.club && state.club.id);
   showEl($('section-kalender'), hasClub);
+  showEl($('club-config-actions'), hasClub);
+  if (!hasClub) showEl($('club-config-status'), false);
+}
+
+function updateClubSectionTitle() {
+  const titleEl = $('section-verein-title');
+  if (!titleEl) return;
+  const count = getAllClubs().length;
+  titleEl.textContent = count > 1 ? 'Vereine' : 'Verein';
 }
 
 function renderCompactClubSelection() {
@@ -996,31 +1005,39 @@ function renderRecentClubs() {
   const clubs = loadRecentClubs();
   const recentConfigs = readRecentConfigs();
   if (!clubs.length && !recentConfigs.length) { showEl(container, false); return; }
+  const recentItems = [];
+  clubs.forEach(club => recentItems.push({ type: 'club', club }));
+  recentConfigs.forEach(entry => recentItems.push({ type: 'config', entry }));
   showEl(container, true);
   container.innerHTML =
     '<div class="recent-clubs-head">' +
       '<div class="recent-clubs-label">Zuletzt verwendet:</div>' +
-      '<button type="button" class="recent-clubs-reset" id="recent-clubs-reset">zurücksetzen</button>' +
+      '<button type="button" class="recent-clubs-reset" id="recent-clubs-reset">Verlauf löschen</button>' +
     '</div>' +
-    (clubs.length ? '<div class="recent-sub-label">Vereine</div><div class="recent-clubs-list">' +
-    clubs.map(club =>
-      '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="' + escapeHtml(club.name) + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
-      '<span class="recent-club-logo-wrap">' +
-      (club.logoUrl
-        ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name) + '" loading="lazy">'
-        : '<span class="recent-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>') +
-      '</span>' +
-      '<span class="recent-club-name">' + escapeHtml(club.name) + '</span>' +
-      '</button>'
-    ).join('') + '</div>' : '') +
-    (recentConfigs.length ? '<div class="recent-sub-label">Konfigurationen</div><div class="recent-clubs-list recent-configs-list">' +
-      recentConfigs.map(entry =>
-        '<button class="recent-club-btn recent-config-btn" type="button" data-config-id="' + escapeHtml(entry.id) + '" title="Konfiguration ' + escapeHtml(entry.id) + '">' +
-          '<span class="recent-config-id">' + escapeHtml(entry.id) + '</span>' +
-          '<span class="recent-club-name">' + escapeHtml(entry.label || entry.id) + '</span>' +
-        '</button>'
-      ).join('') +
-      '</div>' : '');
+    '<div class="recent-clubs-list recent-configs-list">' +
+      recentItems.map(item => {
+        if (item.type === 'config') {
+          const entry = item.entry || {};
+          return (
+            '<button class="recent-club-btn recent-config-btn" type="button" data-config-id="' + escapeHtml(entry.id || '') + '" title="Vereinsfilter ' + escapeHtml(entry.id || '') + '">' +
+              '<span class="recent-config-id">' + escapeHtml(entry.id || '') + '</span>' +
+              '<span class="recent-club-name">' + escapeHtml(entry.label || entry.id || '') + '</span>' +
+            '</button>'
+          );
+        }
+        const club = item.club || {};
+        return (
+          '<button class="recent-club-btn" type="button" data-club-id="' + escapeHtml(club.id || '') + '" title="' + escapeHtml(club.name || '') + (club.location ? ' \u00b7 ' + escapeHtml(club.location) : '') + '">' +
+            '<span class="recent-club-logo-wrap">' +
+            (club.logoUrl
+              ? '<img class="recent-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || '') + '" loading="lazy">'
+              : '<span class="recent-club-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>') +
+            '</span>' +
+            '<span class="recent-club-name">' + escapeHtml(club.name || '') + '</span>' +
+          '</button>'
+        );
+      }).join('') +
+    '</div>';
   const resetBtn = $('recent-clubs-reset');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
@@ -1086,12 +1103,11 @@ function selectClub(club) {
 function renderSelectedClub() {
   const el = $('selected-club-info');
   if (!el) return;
+  updateClubSectionTitle();
   const club = state.club;
   if (!club) {
-    el.innerHTML =
-      '<div class="selected-club-label">Ausgewählter Verein</div>' +
-      '<div class="selected-club-cards"><div class="selected-club-card selected-club-card--empty">Bitte Verein auswählen</div></div>';
-    showEl(el, true);
+    el.innerHTML = '';
+    showEl(el, false);
     return;
   }
   const allClubs = getAllClubs();
@@ -1108,12 +1124,14 @@ function renderSelectedClub() {
           '<div class="selected-club-logo-wrap">' + logoHtml + '</div>' +
           '<div class="selected-club-details">' +
             '<div class="selected-club-name">' + escapeHtml(c.name) + '</div>' +
-            (c.location ? '<div class="selected-club-location">' + escapeHtml(c.location) + '</div>' : '') +
-            (clubUrl ? '<div class="selected-club-link"><a href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">Verein auf fussball.de &#8599;</a></div>' : '') +
+            '<div class="selected-club-meta-row">' +
+              (c.location ? '<div class="selected-club-location">' + escapeHtml(c.location) + '</div>' : '<div class="selected-club-location"> </div>') +
+              '<div class="selected-club-actions">' +
+                (clubUrl ? '<a class="btn btn-sm btn-secondary selected-club-link-btn" href="' + escapeHtml(clubUrl) + '" target="_blank" rel="noopener noreferrer">fussball.de</a>' : '') +
+                '<button class="btn btn-sm add-training-club-card-btn" data-club-id="' + escapeHtml(c.id) + '">+ Training</button>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
-        '</div>' +
-        '<div class="selected-club-actions">' +
-          '<button class="btn btn-sm add-training-club-card-btn" data-club-id="' + escapeHtml(c.id) + '">+ Training</button>' +
         '</div>' +
         removeBtn +
       '</div>'
@@ -1676,15 +1694,23 @@ function reconcileVenueSelection() {
   saveVenuesCookie();
 }
 
+function applyVenueSelection(checkedIds) {
+  const validIds = new Set(state.venues.map(v => v.id));
+  const filtered = Array.from(new Set((checkedIds || []).filter(id => validIds.has(id))));
+  state.selectedVenueIds =
+    filtered.length === 0 || filtered.length === state.venues.length ? null : filtered;
+  saveVenuesCookie();
+  renderCurrentView();
+}
+
 function renderVenueCheckboxes() {
   const loadingEl = $('venues-loading');
   const emptyEl   = $('venues-empty');
   const monthCbEl = $('venues-checkboxes');
-  const weekCbEl  = $('week-venues-checkboxes');
   const errEl     = $('venues-error');
   const monthWrapEl = $('venues-selection-inline');
   const isWeekView = state.view === 'week';
-  const cbEl = isWeekView ? weekCbEl : monthCbEl;
+  const cbEl = monthCbEl;
 
   showEl(loadingEl, false);
   showEl(errEl, false);
@@ -1693,7 +1719,6 @@ function renderVenueCheckboxes() {
     emptyEl.textContent = 'Bitte zuerst einen Verein auswählen.';
     showEl(emptyEl, true);
     showEl(monthWrapEl, false);
-    if (weekCbEl) weekCbEl.innerHTML = '';
     return;
   }
 
@@ -1701,15 +1726,13 @@ function renderVenueCheckboxes() {
     emptyEl.textContent = 'Keine Spielstätten gefunden.';
     showEl(emptyEl, true);
     showEl(monthWrapEl, false);
-    if (weekCbEl) weekCbEl.innerHTML = '';
     return;
   }
 
   showEl(emptyEl, false);
   showEl(monthWrapEl, !isWeekView);
   monthWrapEl.classList.toggle('venues-selection-inline--compact', !isWeekView);
-  if (weekCbEl) showEl(weekCbEl, isWeekView);
-  if (!cbEl) return;
+  if (!cbEl || isWeekView) return;
 
   const MAPS_BASE = 'https://www.google.com/maps/search/?api=1&query=';
 
@@ -1735,9 +1758,7 @@ function renderVenueCheckboxes() {
     cb.addEventListener('change', () => {
       const allBoxes = cbEl.querySelectorAll('input[type="checkbox"]');
       const checked  = Array.from(allBoxes).filter(b => b.checked).map(b => b.dataset.venueId);
-      state.selectedVenueIds = checked.length === state.venues.length ? null : checked;
-      saveVenuesCookie();
-      renderCurrentView();
+      applyVenueSelection(checked);
     });
   });
 }
@@ -1795,8 +1816,8 @@ function renderWeekView() {
     grid.appendChild(hd);
   });
 
-  const visibleVenues = getVisibleVenues();
-  if (!visibleVenues.length) {
+  const allVenues = state.venues.slice();
+  if (!allVenues.length) {
     showEl($('no-games-msg'), true);
     showEl($('week-view'), false);
     return;
@@ -1804,7 +1825,7 @@ function renderWeekView() {
 
   const hasWeekGames = state.games.some(game => {
     const vid = deriveVenueId(game);
-    if (!visibleVenues.find(v => v.id === vid)) return false;
+    if (!isVenueSelected(vid)) return false;
     const d = new Date(game.startDate);
     return d >= weekStart && d < weekEndExclusive;
   });
@@ -1812,25 +1833,50 @@ function renderWeekView() {
 
   const weekGames = [];
 
-  visibleVenues.forEach((venue, index) => {
+  allVenues.forEach((venue, index) => {
     const colorIndex = state.venues.findIndex(v => v.id === venue.id);
     const vColor     = VENUE_COLORS[colorIndex % VENUE_COLORS.length];
+    const venueVisible = isVenueSelected(venue.id);
 
     // Full-width venue name header spanning all 7 columns
     const rowHeader = document.createElement('div');
     rowHeader.className = 'wg-venue-row-header' + (index % 2 === 0 ? ' wg-row-even' : '');
     rowHeader.innerHTML =
+      '<label class="wg-venue-toggle" title="Spielstätte ein-/ausblenden">' +
+      '<input type="checkbox" class="wg-venue-checkbox" data-venue-id="' + escapeHtml(venue.id) + '"' + (isVenueSelected(venue.id) ? ' checked' : '') + '>' +
+      '</label>' +
       '<span class="dot" style="background:' + vColor + '"></span>' +
       '<span class="wg-venue-text" title="' + escapeHtml(venue.name) + '">' + escapeHtml(venue.name) + '</span>';
+    const venueToggle = rowHeader.querySelector('.wg-venue-checkbox');
+    if (venueToggle) {
+      venueToggle.addEventListener('change', (event) => {
+        const target = event.currentTarget;
+        const venueId = target && target.dataset ? target.dataset.venueId : '';
+        if (!venueId) return;
+        const selected = state.selectedVenueIds
+          ? state.selectedVenueIds.slice()
+          : state.venues.map(v => v.id);
+        const nextSelected = target.checked
+          ? selected.concat([venueId])
+          : selected.filter(id => id !== venueId);
+        applyVenueSelection(nextSelected);
+      });
+    }
     grid.appendChild(rowHeader);
 
     days.forEach(day => {
       const cell = document.createElement('div');
       cell.className = 'wg-cell' + (index % 2 === 0 ? ' wg-row-even' : '');
+      if (!venueVisible) cell.classList.add('wg-cell-hidden');
 
       const dayGames = state.games
         .filter(g => deriveVenueId(g) === venue.id && isSameDay(new Date(g.startDate), day))
         .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+      if (!venueVisible) {
+        grid.appendChild(cell);
+        return;
+      }
 
       dayGames.forEach(game => {
         weekGames.push(game);
@@ -1892,6 +1938,8 @@ function renderMonthView() {
 
   const listEl = $('month-list');
   listEl.innerHTML = '';
+  const monthLegendEl = $('venues-month-legend');
+  if (monthLegendEl) monthLegendEl.innerHTML = '';
 
   const visibleVenues = getVisibleVenues();
   const visibleIds = new Set(visibleVenues.map(v => v.id));
@@ -1918,8 +1966,8 @@ function renderMonthView() {
 
   showEl($('no-games-msg'), false);
 
-  // Legend for team categories visible in this month (at top)
-  renderLegend(monthGames, listEl);
+  // Legend for team categories visible in this month (in venues box)
+  if (monthLegendEl) renderLegend(monthGames, monthLegendEl);
 
   const byDay = new Map();
   monthGames.forEach(game => {
@@ -2199,11 +2247,25 @@ async function init() {
   state.currentMonth     = new Date(today.getFullYear(), today.getMonth(), 1);
 
   const requestedConfigId = sanitizeConfigId(new URLSearchParams(window.location.search).get(URL_CONFIG_PARAM) || '');
+  let loadedViaClubParam = false;
   if (requestedConfigId) {
     if (!loadConfigById(requestedConfigId, true)) {
       showConfigStatus('Konfiguration "' + requestedConfigId + '" wurde nicht gefunden.', true);
       updateUrlConfigParam('');
     }
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const requestedClubId = String(params.get('clubId') || '').trim();
+  if (!requestedConfigId && requestedClubId && !state.club) {
+    const presetClub = {
+      id: requestedClubId,
+      name: String(params.get('clubName') || requestedClubId).trim(),
+      logoUrl: String(params.get('clubLogoUrl') || '').trim(),
+      location: String(params.get('clubLocation') || '').trim(),
+    };
+    await selectClub(presetClub);
+    loadedViaClubParam = true;
   }
 
   renderSelectedClub();
@@ -2216,7 +2278,9 @@ async function init() {
   $('view-month-btn').classList.toggle('btn-active', state.view === 'month');
 
   if (state.club && state.club.id) {
-    await autoLoadGames();
+    if (!loadedViaClubParam) {
+      await autoLoadGames();
+    }
     if (requestedConfigId && state.compactClubSelection) jumpToCalendar();
   } else {
     renderVenueCheckboxes();

@@ -6,6 +6,10 @@
   <title>Platzbelegung – Admin</title>
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f5f7fb; color: #122; }
+    .topbar { background: linear-gradient(160deg, #005229 0%, #004020 70%, #003018 100%); color:#fff; border-bottom:3px solid #ff8800; }
+    .topbar-inner { max-width: 1100px; margin: 0 auto; padding: 14px 24px; display:flex; align-items:center; gap:10px; }
+    .topbar img { width:34px; height:34px; border-radius: 10px; background: rgba(255,255,255,0.1); padding:4px; }
+    .topbar-title { font-size: 20px; font-weight: 800; }
     .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
     .card { background: #fff; border: 1px solid #dbe3f0; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
     h1, h2 { margin: 0 0 12px; }
@@ -18,12 +22,26 @@
     .error { color: #b00020; margin-top: 8px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e4eaf5; font-size: 14px; }
+    .stats-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap:10px; margin-bottom:12px; }
+    .stat-tile { background:#f7faff; border:1px solid #dbe6fb; border-radius:10px; padding:10px 12px; }
+    .stat-k { font-size:12px; color:#567; margin-bottom:4px; }
+    .stat-v { font-size:22px; font-weight:700; color:#154ed0; line-height:1.1; }
+    .group-sep td { border-top: 2px solid #dbe6fb; }
+    .table-controls { display:flex; justify-content:flex-end; gap:8px; align-items:center; margin: 4px 0 10px; }
+    .table-controls label { font-size: 13px; color:#456; }
+    select { padding: 8px 10px; border: 1px solid #b8c7e0; border-radius: 8px; }
     pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; font-size: 13px; }
   </style>
 </head>
 <body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <img src="/assets/logo-mark.svg" alt="Platzbelegung Logo" />
+      <div class="topbar-title">Platzbelegung · Admin</div>
+    </div>
+  </div>
   <div class="wrap">
-    <h1>Admin Dashboard</h1>
+    <h1>Dashboard</h1>
     <div class="card">
       <h2>Login</h2>
       <div class="row">
@@ -35,12 +53,27 @@
 
     <div id="content" style="display:none">
       <div class="card">
-        <h2>Statistik</h2>
-        <div id="stats-meta" class="muted"></div>
+        <h2>Vereine &amp; Vereinsfilter</h2>
+        <div class="stats-grid">
+          <div class="stat-tile"><div class="stat-k">Parses gesamt</div><div class="stat-v" id="kpi-parses">0</div></div>
+          <div class="stat-tile"><div class="stat-k">Vereine</div><div class="stat-v" id="kpi-clubs">0</div></div>
+          <div class="stat-tile"><div class="stat-k">Vereinsfilter</div><div class="stat-v" id="kpi-filters">0</div></div>
+          <div class="stat-tile"><div class="stat-k">Offene Trainings-Requests</div><div class="stat-v" id="kpi-training-requests">0</div></div>
+          <div class="stat-tile"><div class="stat-k">Geparste Trainingszeiten</div><div class="stat-v" id="kpi-training-parsed">0</div></div>
+        </div>
+        <div class="table-controls">
+          <label for="stats-limit">Anzeigen:</label>
+          <select id="stats-limit">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+          </select>
+        </div>
         <table>
-          <thead><tr><th>Verein</th><th>ID</th><th>Parses</th><th>Zuletzt</th></tr></thead>
+          <thead><tr><th>Eintrag</th><th>Aktivität</th><th>Training (Req/Parsed)</th><th>Zuletzt</th></tr></thead>
           <tbody id="stats-body"></tbody>
         </table>
+        <div class="muted" style="margin-top:8px;">Vereinsfilter werden browser-lokal gespeichert (<code>localStorage: pb_saved_configs_v1</code>).</div>
       </div>
 
       <div class="card">

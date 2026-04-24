@@ -536,10 +536,7 @@ main {
   flex-wrap: wrap;
 }
 .recent-sub-label {
-  font-size: 0.72rem;
-  color: var(--text-light);
-  margin: 0.2rem 0 0.35rem;
-  font-weight: 600;
+  display: none;
 }
 .recent-clubs-reset {
   border: none;
@@ -708,7 +705,7 @@ main {
 
 .selected-club-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
   gap: 0.8rem;
   align-items: stretch;
 }
@@ -771,48 +768,55 @@ main {
 .selected-club-details {
   display: flex;
   flex-direction: column;
-  gap: 0.18rem;
+  gap: 0.28rem;
   min-width: 0;
   justify-content: center;
   flex: 1;
 }
+.selected-club-meta-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
 
 .selected-club-actions {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: nowrap;
-  justify-content: flex-end;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 0.3rem;
   flex-shrink: 0;
-  margin-left: auto;
 }
 
-.selected-club-actions .btn {
+.selected-club-actions .btn,
+.selected-club-actions .selected-club-link-btn {
   white-space: nowrap;
 }
 .selected-club-name {
   font-size: 1rem;
   font-weight: 700;
   color: var(--primary-d);
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 .selected-club-location {
   font-size: 0.82rem;
   color: var(--text-light);
+  max-width: 270px;
 }
-.selected-club-link {
-  font-size: 0.75rem;
-}
-.selected-club-link a {
-  color: var(--primary);
+.selected-club-link-btn {
   text-decoration: none;
-}
-.selected-club-link a:hover {
-  text-decoration: underline;
 }
 .selected-club-card {
   position: relative;
-  padding-right: 3.4rem;
+  padding-right: 2.8rem;
+}
+
+.club-search-heading {
+  margin: 0.95rem 0 0.45rem;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--primary-d);
 }
 
 .sg-remove-club-btn {
@@ -850,9 +854,12 @@ main {
   }
 
   .selected-club-actions {
-    justify-content: flex-end;
-    width: 100%;
-    padding-left: 0;
+    align-items: flex-start;
+  }
+
+  .selected-club-meta-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 /* Spielgemeinschaft suggestion banner */
@@ -1166,20 +1173,11 @@ main {
   font-size: 0.82rem;
   color: var(--primary-d);
 }
-.venues-selection-hint {
-  font-size: 0.72rem;
-  color: var(--text-light);
-}
 .venues-selection-inline--compact .venue-checkbox-item {
-  padding: 0.2rem 0.35rem;
-}
-.venues-selection-inline--compact .venues-checkboxes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.22rem 0.45rem;
+  padding: 0.3rem 0.42rem;
 }
 .venues-selection-inline--compact .venue-name {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
 }
 .nav-controls {
   display: flex;
@@ -1205,17 +1203,6 @@ main {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-.week-venues-checkboxes {
-  margin-top: 0.55rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.25rem 0.5rem;
-}
-.week-venues-checkboxes .venue-checkbox-item {
-  padding: 0.3rem 0.42rem;
-  background: #f8fbf8;
-}
-
 /* Week Grid */
 .week-grid {
   display: grid;
@@ -1269,6 +1256,16 @@ main {
   border-radius: 50%;
   flex-shrink: 0;
 }
+.wg-venue-toggle {
+  display: inline-flex;
+  align-items: center;
+}
+.wg-venue-checkbox {
+  width: 0.95rem;
+  height: 0.95rem;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
 .wg-venue-text {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1283,6 +1280,9 @@ main {
   display: flex;
   flex-direction: column;
   gap: 3px;
+}
+.wg-cell-hidden {
+  display: none;
 }
 /* Subtle alternating row stripe for grass field feel */
 .wg-row-even { background: #f4faf4; }
