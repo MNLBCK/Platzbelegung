@@ -36,6 +36,15 @@ require_clean_worktree() {
   fi
 }
 
+require_main_branch() {
+  local current_branch
+  current_branch="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  if [[ "$current_branch" != "main" ]]; then
+    echo "Releases sind nur auf Branch 'main' erlaubt. Aktueller Branch: ${current_branch:-unbekannt}" >&2
+    exit 1
+  fi
+}
+
 gh_safe() {
   env -u GITHUB_TOKEN gh "$@"
 }
@@ -116,6 +125,7 @@ require_tool git
 require_tool gh
 require_tool python3
 require_clean_worktree
+require_main_branch
 ensure_version_not_exists
 
 update_version_files

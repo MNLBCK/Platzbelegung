@@ -31,7 +31,6 @@ is_true() {
 DEPLOY_METHOD="${DEPLOY_METHOD:-ftps}"
 DEPLOY_PORT="${DEPLOY_PORT:-}"
 DEPLOY_REMOTE_DIR="${DEPLOY_REMOTE_DIR:-}"
-SCRAPE_BEFORE_UPLOAD="${SCRAPE_BEFORE_UPLOAD:-1}"
 GENERATE_HTML="${GENERATE_HTML:-0}"
 UPLOAD_CONFIG="${UPLOAD_CONFIG:-1}"
 UPLOAD_HTACCESS="${UPLOAD_HTACCESS:-1}"
@@ -136,19 +135,9 @@ echo "==> Deploy-Methode: $DEPLOY_METHOD"
 echo "==> Ziel: ${DEPLOY_HOST}:${DEPLOY_REMOTE_DIR}"
 echo "==> Verwende CLI: $PLATZBELEGUNG_CMD"
 
-if is_true "$SCRAPE_BEFORE_UPLOAD"; then
-  echo "==> Erzeuge aktuellen Snapshot"
-  run_platzbelegung scrape
-fi
-
 if is_true "$GENERATE_HTML"; then
   echo "==> Erzeuge HTML-Ausgabe"
   run_platzbelegung html
-fi
-
-if [[ ! -f "$ROOT_DIR/data/latest.json" ]]; then
-  echo "data/latest.json fehlt. Bitte zuerst 'platzbelegung scrape' ausführen." >&2
-  exit 1
 fi
 
 BASE_VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION" 2>/dev/null || printf 'dev')"
@@ -273,7 +262,6 @@ EOF
   fi
 
   lftp_script+=$'\n'"put -O $DEPLOY_REMOTE_DIR BUILD_META.json"
-  lftp_script+=$'\n'"put -O $remote_data_dir data/latest.json"
 
   if is_true "$GENERATE_HTML" && [[ -f "$ROOT_DIR/data/latest.html" ]]; then
     lftp_script+=$'\n'"put -O $remote_data_dir data/latest.html"
@@ -322,9 +310,6 @@ upload_with_rsync() {
 
   echo "==> Lade BUILD_META.json hoch"
   rsync -av -e "$ssh_cmd" "$BUILD_META_PATH" "$remote:$DEPLOY_REMOTE_DIR/BUILD_META.json"
-
-  echo "==> Lade data/latest.json hoch"
-  rsync -av -e "$ssh_cmd" "$ROOT_DIR/data/latest.json" "$remote:$DEPLOY_REMOTE_DIR/data/latest.json"
 
   if is_true "$GENERATE_HTML" && [[ -f "$ROOT_DIR/data/latest.html" ]]; then
     echo "==> Lade data/latest.html hoch"

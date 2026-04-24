@@ -220,7 +220,7 @@ Wenn der Hoster kein SSH anbietet, genügt bereits ein FTP-Client wie FileZilla,
 
 #### Release per Skript
 
-Für versionierte Releases gibt es zusätzlich ein Release-Skript. Es synchronisiert die relevanten Versionsdateien, erstellt Commit + Tag, pusht beides und legt anschließend ein GitHub Release mit automatisch generierten Notes an.
+Für versionierte Releases gibt es zusätzlich ein Release-Skript. Es synchronisiert die relevanten Versionsdateien, erstellt Commit + Tag, pusht beides und legt anschließend ein GitHub Release mit automatisch generierten Notes an. Releases sind dabei nur auf dem Branch `main` erlaubt.
 
 ```bash
 bash scripts/release.sh v0.1.71
@@ -280,10 +280,11 @@ bash scripts/deploy.sh /pfad/zu/meiner.deploy.env
 
 #### Was das Skript macht
 
-- führt optional `platzbelegung scrape` aus
-- lädt `public/`, `backend.php` und `data/latest.json` hoch
+- lädt `public/`, `backend.php` und Build-Metadaten hoch
 - lädt optional zusätzlich `config.yaml`, `.htaccess` und `data/latest.html` hoch
 - unterstützt `ftp`, `ftps`, `sftp` und `rsync`
+
+Hinweis: `data/latest.json` wird bewusst nicht mehr durch das Deploy-Skript erzeugt oder hochgeladen, weil das Scraping separat (z. B. via MSZ) gemanagt wird.
 
 #### Wichtige Dateien für das Skript
 
