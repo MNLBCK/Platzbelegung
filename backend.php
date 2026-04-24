@@ -352,6 +352,9 @@ function normalizeSharedConfigPayload(array $payload): array
         $outClub['name'] = $clubName;
     }
     $clubLogoUrl = trim((string)($club['logoUrl'] ?? $club['logo'] ?? ''));
+    if ($clubLogoUrl === '' && $clubId !== '') {
+        $clubLogoUrl = '/export.media/-/action/getLogo/format/7/id/' . rawurlencode($clubId);
+    }
     if ($clubLogoUrl !== '') {
         $outClub['logoUrl'] = toAbsoluteUrl($clubLogoUrl);
     }
@@ -369,6 +372,9 @@ function normalizeSharedConfigPayload(array $payload): array
         $name = normalizeText((string)($item['name'] ?? ''));
         if ($name !== '') $entry['name'] = $name;
         $logoUrl = trim((string)($item['logoUrl'] ?? $item['logo'] ?? ''));
+        if ($logoUrl === '' && $id !== '') {
+            $logoUrl = '/export.media/-/action/getLogo/format/7/id/' . rawurlencode($id);
+        }
         if ($logoUrl !== '') $entry['logoUrl'] = toAbsoluteUrl($logoUrl);
         $location = normalizeText((string)($item['location'] ?? ''));
         if ($location !== '') $entry['location'] = $location;

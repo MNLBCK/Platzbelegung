@@ -115,7 +115,13 @@ function showLoading(on) { showEl($('loading-indicator'), on); }
 
 function getClubLogoUrl(club) {
   const raw = String((club && (club.logoUrl || club.logo)) || '').trim();
-  if (!raw) return '';
+  if (!raw) {
+    const clubId = String((club && club.id) || '').trim();
+    if (clubId) {
+      return 'https://www.fussball.de/export.media/-/action/getLogo/format/7/id/' + encodeURIComponent(clubId);
+    }
+    return '';
+  }
   if (raw.startsWith('//')) return 'https:' + raw;
   return raw;
 }
