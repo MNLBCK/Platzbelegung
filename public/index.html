@@ -29,7 +29,7 @@
         </div>
       </div>
       <div class="header-meta" id="header-meta">
-        <a class="version-badge" id="app-version-badge" href="https://github.com/MNLBCK/Platzbelegung/releases" target="_blank" rel="noopener noreferrer">v0.1.9</a>
+        <a class="version-badge" id="app-version-badge" href="https://github.com/MNLBCK/Platzbelegung/releases" target="_blank" rel="noopener noreferrer">v0.2</a>
       </div>
     </div>
   </header>
@@ -38,7 +38,7 @@
     <!-- Section 1: Verein -->
     <section class="panel section-step" id="section-verein">
       <h2 class="section-title">
-        Verein
+        <span id="section-verein-title">Verein</span>
         <span class="tooltip-wrap">
           <button class="tooltip-btn" type="button" aria-label="Info">?</button>
           <span class="tooltip-content">Vereinslink von fussball.de einfügen oder Vereinsnamen eingeben. Die Auswahl wird im Browser gespeichert (Cookie).</span>
@@ -50,17 +50,7 @@
       </div>
       <div id="club-selection-dialog">
         <div id="recent-clubs" class="recent-clubs hidden"></div>
-        <div class="input-row">
-          <input
-            type="text"
-            id="club-search-input"
-            placeholder="Vereinsname oder fussball.de Verein-Link…"
-            autocomplete="off"
-          />
-          <button id="club-search-btn" class="btn btn-primary">Suchen</button>
-        </div>
-        <div id="club-search-results" class="search-results hidden"></div>
-        <div id="selected-club-info" class="selected-club-info">
+        <div id="selected-club-info" class="selected-club-info hidden">
         <div class="selected-club-label">Ausgewählte Vereine</div>
         <div class="selected-club-cards">
           <div class="selected-club-card">
@@ -69,10 +59,10 @@
               <div class="selected-club-details">
                 <div class="selected-club-name">SGV Hochdorf</div>
                 <div class="selected-club-location">71686 Remseck am Neckar</div>
-                <div class="selected-club-link"><a href="https://www.fussball.de/verein/sgv-hochdorf-wuerttemberg/-/id/00ES8GNAVO00000RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">Verein auf fussball.de ↗</a></div>
               </div>
             </div>
             <div class="selected-club-actions">
+              <a class="btn btn-sm btn-secondary selected-club-link-btn" href="https://www.fussball.de/verein/sgv-hochdorf-wuerttemberg/-/id/00ES8GNAVO00000RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">fussball.de</a>
               <button class="btn btn-sm" data-club-id="00ES8GNAVO00000RVV0AG08LVUPGND5I" title="+ Training" aria-label="Training melden">+ Training</button>
             </div>
           </div>
@@ -82,10 +72,10 @@
               <div class="selected-club-details">
                 <div class="selected-club-name">VfB Neckarrems</div>
                 <div class="selected-club-location">71686 Remseck am Neckar</div>
-                <div class="selected-club-link"><a href="https://www.fussball.de/verein/vfb-neckarrems-wuerttemberg/-/id/00ES8GNAVO00009RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">Verein auf fussball.de ↗</a></div>
               </div>
             </div>
             <div class="selected-club-actions">
+              <a class="btn btn-sm btn-secondary selected-club-link-btn" href="https://www.fussball.de/verein/vfb-neckarrems-wuerttemberg/-/id/00ES8GNAVO00009RVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">fussball.de</a>
               <button class="btn btn-sm" data-club-id="00ES8GNAVO00009RVV0AG08LVUPGND5I" title="+ Training" aria-label="Training melden">+ Training</button>
               <button class="sg-remove-club-btn" data-club-id="00ES8GNAVO00009RVV0AG08LVUPGND5I" title="Verein entfernen" aria-label="Verein entfernen">×</button>
             </div>
@@ -96,16 +86,27 @@
               <div class="selected-club-details">
                 <div class="selected-club-name">SKV Hochberg</div>
                 <div class="selected-club-location">71686 Remseck am Neckar</div>
-                <div class="selected-club-link"><a href="https://www.fussball.de/verein/skv-hochberg-wuerttemberg/-/id/00ES8GNAVO00000PVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">Verein auf fussball.de ↗</a></div>
               </div>
             </div>
             <div class="selected-club-actions">
+              <a class="btn btn-sm btn-secondary selected-club-link-btn" href="https://www.fussball.de/verein/skv-hochberg-wuerttemberg/-/id/00ES8GNAVO00000PVV0AG08LVUPGND5I" target="_blank" rel="noopener noreferrer">fussball.de</a>
               <button class="btn btn-sm" data-club-id="00ES8GNAVO00000PVV0AG08LVUPGND5I" title="+ Training" aria-label="Training melden">+ Training</button>
               <button class="sg-remove-club-btn" data-club-id="00ES8GNAVO00000PVV0AG08LVUPGND5I" title="Verein entfernen" aria-label="Verein entfernen">×</button>
             </div>
           </div>
         </div>
         </div>
+        <div class="club-search-heading">Verein hinzufügen</div>
+        <div class="input-row">
+          <input
+            type="text"
+            id="club-search-input"
+            placeholder="Vereinsname oder fussball.de Verein-Link…"
+            autocomplete="off"
+          />
+          <button id="club-search-btn" class="btn btn-primary">Suchen</button>
+        </div>
+        <div id="club-search-results" class="search-results hidden"></div>
         <div id="sg-suggestion" class="sg-suggestion">
         <div class="sg-suggestion-icon">🤝</div>
         <div class="sg-suggestion-body">
@@ -138,7 +139,7 @@
           <div class="team-overview-table"><span class="team-overview-name">SGM SKV Hochberg/SGV Hochdorf II</span><span class="team-overview-comp">E-Junioren | Kreisstaffel</span><span class="team-overview-actions"><button class="btn btn-sm" title="+ Training" aria-label="Training melden">+ Training</button></span></div>
         </div>
         </details>
-        <div class="config-actions config-actions-subtle">
+        <div id="club-config-actions" class="config-actions config-actions-subtle">
           <button id="save-club-config-btn" class="btn btn-sm btn-quiet" type="button">speichern</button>
           <input
             type="text"
@@ -184,9 +185,9 @@
       <div id="venues-selection-inline" class="venues-selection-inline hidden">
         <div class="venues-selection-head">
           <span class="venues-selection-title">Spielstätten</span>
-          <span class="venues-selection-hint">Monat: kompakte Auswahl oben</span>
         </div>
         <div id="venues-checkboxes" class="venues-checkboxes"></div>
+        <div id="venues-month-legend"></div>
       </div>
 
       <div id="loading-indicator" class="loading hidden">

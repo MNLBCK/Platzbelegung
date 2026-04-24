@@ -1,5 +1,30 @@
 (function () {
   const $ = (id) => document.getElementById(id);
+  let showAllHits = false;
+  let statsLimit = 10;
+  const SAVED_CONFIGS_KEY = 'pb_saved_configs_v1';
+
+  function buildClubUrl(club) {
+    const id = String(club && club.id || '').trim();
+    if (!id) return '';
+    const url = new URL(window.location.origin + '/');
+    url.searchParams.set('clubId', id);
+    if (club && club.name) url.searchParams.set('clubName', String(club.name));
+    if (club && club.logoUrl) url.searchParams.set('clubLogoUrl', String(club.logoUrl));
+    if (club && club.location) url.searchParams.set('clubLocation', String(club.location));
+    return url.toString();
+  }
+
+  function readSavedConfigs() {
+    try {
+      const raw = window.localStorage.getItem(SAVED_CONFIGS_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
 
   function fmt(value) {
     if (!value) return '-';
@@ -11,34 +36,127 @@
     $('error').textContent = msg || '';
   }
 
-  function renderStats(stats) {
+  function renderStats(stats, hits) {
     const body = $('stats-body');
     body.innerHTML = '';
-    (stats.clubs || []).forEach((club) => {
+    const clubs = stats.clubs || [];
+    const totalParses = clubs.reduce((sum, club) => sum + Number(club.parses || 0), 0);
+    const configHits = parseConfigHits((hits && hits.paths) || []);
+    const savedConfigs = readSavedConfigs();
+    const savedConfigIds = Object.keys(savedConfigs);
+    const mergedConfigIds = Array.from(new Set(savedConfigIds.concat(configHits.map(c => c.configId)))).sort();
+
+    const clubRows = clubs.map((club) => {
       const tr = document.createElement('tr');
 
       const nameCell = document.createElement('td');
-      nameCell.textContent = club.name || '-';
-
-      const idCell = document.createElement('td');
-      const code = document.createElement('code');
-      code.textContent = club.id || '-';
-      idCell.appendChild(code);
+      const clubUrl = buildClubUrl(club);
+      if (clubUrl && club.name) {
+        const link = document.createElement('a');
+        link.href = clubUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = club.name;
+        nameCell.appendChild(link);
+      } else {
+        nameCell.textContent = club.name || club.id || '-';
+      }
 
       const parsesCell = document.createElement('td');
-      parsesCell.textContent = String(club.parses || 0);
+      parsesCell.textContent = String(club.parses || 0) + ' Parses';
+
+      const trainingCell = document.createElement('td');
+      trainingCell.textContent = String(club.trainingRequested || 0) + ' / ' + String(club.trainingParsed || 0);
 
       const lastParsedCell = document.createElement('td');
       lastParsedCell.textContent = fmt(club.lastParsedAt);
 
       tr.appendChild(nameCell);
-      tr.appendChild(idCell);
       tr.appendChild(parsesCell);
+      tr.appendChild(trainingCell);
       tr.appendChild(lastParsedCell);
-      body.appendChild(tr);
+      return { activity: Number(club.parses || 0), row: tr };
     });
-    $('stats-meta').textContent = 'Gesamt: ' + (stats.totalParses || 0) + ' Parses, ' +
-      (stats.totalClubs || 0) + ' Vereine, aktualisiert: ' + fmt(stats.updatedAt);
+
+    const filterRows = mergedConfigIds.map((configId) => {
+      const tr = document.createElement('tr');
+
+      const entryCell = document.createElement('td');
+      const link = document.createElement('a');
+      link.href = '/?config=' + encodeURIComponent(configId);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = configId;
+      entryCell.appendChild(link);
+
+      const cfg = savedConfigs[configId] || {};
+      const clubNames = [];
+      if (cfg.club && (cfg.club.name || cfg.club.id)) clubNames.push(cfg.club.name || cfg.club.id);
+      if (Array.isArray(cfg.additionalClubs)) {
+        cfg.additionalClubs.forEach((c) => clubNames.push((c && (c.name || c.id)) || ''));
+      }
+      if (clubNames.filter(Boolean).length) {
+        const hint = document.createElement('span');
+        hint.style.marginLeft = '6px';
+        hint.textContent = '· ' + clubNames.filter(Boolean).join(' + ');
+        entryCell.appendChild(hint);
+      }
+
+      const hit = configHits.find((row) => row.configId === configId);
+      const activityCell = document.createElement('td');
+      activityCell.textContent = String(hit ? hit.hits : 0) + ' Aufrufe';
+
+      const trainingCell = document.createElement('td');
+      trainingCell.textContent = '-';
+
+      const lastCell = document.createElement('td');
+      lastCell.textContent = fmt(cfg.updatedAt || null);
+
+      tr.appendChild(entryCell);
+      tr.appendChild(activityCell);
+      tr.appendChild(trainingCell);
+      tr.appendChild(lastCell);
+      return { activity: Number(hit ? hit.hits : 0), row: tr };
+    });
+
+    const appendGroup = (items, addSeparator = false) => {
+      const sorted = items.sort((a, b) => b.activity - a.activity).slice(0, statsLimit);
+      sorted.forEach((item, idx) => {
+        if (addSeparator && idx === 0) item.row.classList.add('group-sep');
+        body.appendChild(item.row);
+      });
+    };
+
+    appendGroup(clubRows);
+    appendGroup(filterRows, true);
+
+    const training = stats.training || {};
+    $('kpi-parses').textContent = String(totalParses);
+    $('kpi-clubs').textContent = String(stats.totalClubs || clubs.length || 0);
+    $('kpi-filters').textContent = String(mergedConfigIds.length);
+    $('kpi-training-requests').textContent = String(training.pendingRequests || 0);
+    $('kpi-training-parsed').textContent = String(training.parsedSessions || 0);
+
+  }
+
+  function parseConfigHits(paths) {
+    const counts = new Map();
+    (paths || []).forEach((row) => {
+      const rawPath = String(row.path || '');
+      const hits = Number(row.hits || 0);
+      let url;
+      try {
+        url = new URL(rawPath, window.location.origin);
+      } catch (e) {
+        return;
+      }
+      const configId = (url.searchParams.get('config') || '').trim();
+      if (!configId) return;
+      counts.set(configId, (counts.get(configId) || 0) + hits);
+    });
+    return Array.from(counts.entries())
+      .map(([configId, hits]) => ({ configId, hits }))
+      .sort((a, b) => b.hits - a.hits || a.configId.localeCompare(b.configId));
   }
 
   function parseConfigHits(paths) {
@@ -104,9 +222,13 @@
   }
 
   function renderHits(hits) {
+    const toggle = $('hits-toggle');
     const body = $('hits-body');
     body.innerHTML = '';
-    (hits.paths || []).forEach((row) => {
+    const rows = hits.paths || [];
+    const visibleRows = showAllHits ? rows : rows.slice(0, 10);
+
+    visibleRows.forEach((row) => {
       const tr = document.createElement('tr');
       const pathCell = document.createElement('td');
       const code = document.createElement('code');
@@ -121,7 +243,20 @@
       body.appendChild(tr);
     });
     $('hits-meta').textContent = 'Gesamt: ' + (hits.total || 0) + ' Hits, aktualisiert: ' + fmt(hits.updatedAt);
-    renderConfigHits(hits);
+
+    if (toggle) {
+      if (rows.length > 10) {
+        toggle.style.display = 'inline-block';
+        toggle.textContent = showAllHits ? 'Weniger anzeigen' : 'Weitere anzeigen';
+        toggle.onclick = () => {
+          showAllHits = !showAllHits;
+          renderHits(hits);
+        };
+      } else {
+        toggle.style.display = 'none';
+        toggle.onclick = null;
+      }
+    }
   }
 
   async function loadDashboard() {
@@ -154,10 +289,17 @@
       return;
     }
 
-    renderStats(data.stats || {});
+    renderStats(data.stats || {}, data.pageHits || {});
     renderHits(data.pageHits || {});
-    $('config-json').textContent = JSON.stringify(data.config || {}, null, 2);
     $('content').style.display = 'block';
+  }
+
+  const statsLimitEl = $('stats-limit');
+  if (statsLimitEl) {
+    statsLimitEl.addEventListener('change', () => {
+      statsLimit = Number(statsLimitEl.value || 10);
+      $('load').click();
+    });
   }
 
   $('load').addEventListener('click', loadDashboard);
