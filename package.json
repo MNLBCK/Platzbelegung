@@ -1,6 +1,6 @@
 {
   "name": "platzbelegung",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Durchsucht online Quellen (vorrangig fussball.de) nach Spielen auf einem oder mehreren bestimmten Sportplätzen, und stellt die Platzbelegung übersichtlich dar.",
   "main": "backend.php",
   "scripts": {
