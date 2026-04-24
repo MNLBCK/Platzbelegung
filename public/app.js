@@ -866,14 +866,23 @@ function saveRecentConfig(configId, configData) {
   if (!cleanId) return;
   const recent = readRecentConfigs().filter(entry => sanitizeConfigId(entry && entry.id) !== cleanId);
   const clubs = [];
-  if (configData && configData.club) clubs.push(configData.club.name || configData.club.id || '');
+  if (configData && configData.club) clubs.push({
+    id: configData.club.id || '',
+    name: configData.club.name || configData.club.id || '',
+    logoUrl: configData.club.logoUrl || '',
+  });
   if (configData && Array.isArray(configData.additionalClubs)) {
-    configData.additionalClubs.forEach(c => clubs.push(c.name || c.id || ''));
+    configData.additionalClubs.forEach(c => clubs.push({
+      id: c.id || '',
+      name: c.name || c.id || '',
+      logoUrl: c.logoUrl || '',
+    }));
   }
-  const label = clubs.filter(Boolean).slice(0, 2).join(' + ') || cleanId;
+  const label = clubs.map(c => c.name).filter(Boolean).slice(0, 2).join(' + ') || cleanId;
   recent.unshift({
     id: cleanId,
     label,
+    clubs,
     usedAt: new Date().toISOString(),
   });
   writeRecentConfigs(recent.slice(0, 5));
@@ -1012,8 +1021,15 @@ function renderRecentClubs() {
       recentItems.map(item => {
         if (item.type === 'config') {
           const entry = item.entry || {};
+          const configClubs = Array.isArray(entry.clubs) ? entry.clubs : [];
+          const logosHtml = configClubs.map(club => (
+            club.logoUrl
+              ? '<img class="recent-config-logo" src="' + escapeHtml(club.logoUrl) + '" alt="' + escapeHtml(club.name || club.id || '') + '" loading="lazy">'
+              : '<span class="recent-config-logo-fallback">' + escapeHtml((club.name || '?').charAt(0).toUpperCase()) + '</span>'
+          )).join('');
           return (
             '<button class="recent-club-btn recent-config-btn" type="button" data-config-id="' + escapeHtml(entry.id || '') + '" title="Vereinsfilter ' + escapeHtml(entry.id || '') + '">' +
+              '<span class="recent-config-logos">' + logosHtml + '</span>' +
               '<span class="recent-config-id">' + escapeHtml(entry.id || '') + '</span>' +
               '<span class="recent-club-name">' + escapeHtml(entry.label || entry.id || '') + '</span>' +
             '</button>'

@@ -32,7 +32,7 @@
         if (club && (club.name || club.id)) names.push(club.name || club.id);
       });
     }
-    return names.slice(0, 2).join(' + ');
+    return names.join(', ');
   }
 
   function renderStats(stats) {
@@ -109,9 +109,6 @@
       link.textContent = cfg.id;
       idCell.appendChild(link);
 
-      const labelCell = document.createElement('td');
-      labelCell.textContent = cfg.label || configClubLabel(cfg) || '-';
-
       const clubsCell = document.createElement('td');
       clubsCell.textContent = configClubLabel(cfg) || '-';
 
@@ -125,8 +122,8 @@
       const renameBtn = document.createElement('button');
       renameBtn.type = 'button';
       renameBtn.className = 'btn-secondary';
-      renameBtn.textContent = 'Umbenennen';
-      renameBtn.addEventListener('click', () => renameConfig(cfg));
+      renameBtn.textContent = 'ID umbenennen';
+      renameBtn.addEventListener('click', () => renameConfigId(cfg));
 
       const deleteBtn = document.createElement('button');
       deleteBtn.type = 'button';
@@ -139,7 +136,6 @@
       actionsCell.appendChild(deleteBtn);
 
       tr.appendChild(idCell);
-      tr.appendChild(labelCell);
       tr.appendChild(clubsCell);
       tr.appendChild(hitsCell);
       tr.appendChild(updatedCell);
@@ -148,34 +144,33 @@
     });
   }
 
-  async function renameConfig(cfg) {
+  async function renameConfigId(cfg) {
     const password = $('password').value.trim();
     if (!password) {
       setError('Bitte Passwort eingeben.');
       return;
     }
-    const current = cfg.label || configClubLabel(cfg) || cfg.id;
-    const nextLabel = window.prompt('Neues Label für ' + cfg.id, current);
-    if (nextLabel === null) return;
-    const clean = String(nextLabel).trim();
+    const nextId = window.prompt('Neue ID für ' + cfg.id, cfg.id);
+    if (nextId === null) return;
+    const clean = String(nextId).trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
     if (!clean) {
-      setError('Label darf nicht leer sein.');
+      setError('Neue ID ist ungültig.');
       return;
     }
     try {
       const resp = await fetch('/api/admin/shared-config?id=' + encodeURIComponent(cfg.id) + '&password=' + encodeURIComponent(password), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label: clean }),
+        body: JSON.stringify({ newId: clean }),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        setError(data.error || 'Umbenennen fehlgeschlagen.');
+        setError(data.error || 'ID-Umbenennung fehlgeschlagen.');
         return;
       }
       await loadDashboard();
     } catch (e) {
-      setError('Netzwerkfehler beim Umbenennen.');
+      setError('Netzwerkfehler beim ID-Umbenennen.');
     }
   }
 
@@ -236,7 +231,6 @@
     sharedConfigs = Array.isArray(data.sharedConfigs) ? data.sharedConfigs : [];
     renderStats(data.stats || {});
     renderSharedConfigsTable();
-    $('config-json').textContent = JSON.stringify(data.config || {}, null, 2);
     $('content').style.display = 'block';
   }
 

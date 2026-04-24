@@ -351,6 +351,14 @@ function normalizeSharedConfigPayload(array $payload): array
     if ($clubName !== '') {
         $outClub['name'] = $clubName;
     }
+    $clubLogoUrl = trim((string)($club['logoUrl'] ?? ''));
+    if ($clubLogoUrl !== '') {
+        $outClub['logoUrl'] = $clubLogoUrl;
+    }
+    $clubLocation = normalizeText((string)($club['location'] ?? ''));
+    if ($clubLocation !== '') {
+        $outClub['location'] = $clubLocation;
+    }
 
     $additionalClubs = [];
     foreach (($payload['additionalClubs'] ?? []) as $item) {
@@ -360,15 +368,16 @@ function normalizeSharedConfigPayload(array $payload): array
         $entry = ['id' => $id];
         $name = normalizeText((string)($item['name'] ?? ''));
         if ($name !== '') $entry['name'] = $name;
+        $logoUrl = trim((string)($item['logoUrl'] ?? ''));
+        if ($logoUrl !== '') $entry['logoUrl'] = $logoUrl;
+        $location = normalizeText((string)($item['location'] ?? ''));
+        if ($location !== '') $entry['location'] = $location;
         $additionalClubs[] = $entry;
     }
-
-    $label = normalizeText((string)($payload['label'] ?? ''));
 
     return [
         'club' => $outClub,
         'additionalClubs' => $additionalClubs,
-        'label' => $label,
     ];
 }
 
@@ -380,7 +389,6 @@ function listSharedConfigsForAdmin(): array
         if (!is_array($config)) continue;
         $rows[] = [
             'id' => sanitizeSharedConfigId((string)$id),
-            'label' => (string)($config['label'] ?? ''),
             'club' => is_array($config['club'] ?? null) ? $config['club'] : (object)[],
             'additionalClubs' => is_array($config['additionalClubs'] ?? null) ? array_values($config['additionalClubs']) : [],
             'updatedAt' => $config['updatedAt'] ?? null,
@@ -1138,7 +1146,6 @@ if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/'))
         saveSharedConfigsStore($store);
         jsonResponse([
             'id' => $id,
-            'label' => (string)($config['label'] ?? ''),
             'club' => is_array($config['club'] ?? null) ? $config['club'] : (object)[],
             'additionalClubs' => is_array($config['additionalClubs'] ?? null) ? array_values($config['additionalClubs']) : [],
             'updatedAt' => $config['updatedAt'] ?? null,
@@ -1230,18 +1237,7 @@ if ($method === 'POST' && $uri === '/api/shared-config') {
     }
     $now = gmdate(DATE_ATOM);
     $existing = is_array($configs[$id] ?? null) ? $configs[$id] : [];
-    $label = trim((string)($payload['label'] ?? ''));
-    if ($label === '') {
-        $labelCandidates = [];
-        $labelCandidates[] = (string)($payload['club']['name'] ?? $payload['club']['id'] ?? '');
-        foreach (($payload['additionalClubs'] ?? []) as $club) {
-            if (!is_array($club)) continue;
-            $labelCandidates[] = (string)($club['name'] ?? $club['id'] ?? '');
-        }
-        $label = implode(' + ', array_slice(array_values(array_filter(array_map('trim', $labelCandidates))), 0, 2));
-    }
     $configs[$id] = [
-        'label' => $label,
         'club' => $payload['club'],
         'additionalClubs' => $payload['additionalClubs'],
         'createdAt' => $existing['createdAt'] ?? $now,
@@ -1271,9 +1267,9 @@ if ($method === 'PATCH' && $uri === '/api/admin/shared-config') {
         return;
     }
     $body = getJsonBody();
-    $label = normalizeText((string)($body['label'] ?? ''));
-    if ($label === '') {
-        jsonResponse(['error' => 'Neues Label erforderlich.'], 400);
+    $newId = sanitizeSharedConfigId((string)($body['newId'] ?? ''));
+    if ($newId === '') {
+        jsonResponse(['error' => 'Neue Konfigurations-ID erforderlich.'], 400);
         return;
     }
     $store = loadSharedConfigsStore();
@@ -1282,14 +1278,18 @@ if ($method === 'PATCH' && $uri === '/api/admin/shared-config') {
         jsonResponse(['error' => 'Konfiguration nicht gefunden.'], 404);
         return;
     }
-    $config['label'] = $label;
-    $config['updatedAt'] = gmdate(DATE_ATOM);
-    $store['configs'][$id] = $config;
-    if (!saveSharedConfigsStore($store)) {
-        jsonResponse(['error' => 'Konfiguration konnte nicht aktualisiert werden.'], 500);
+    if ($newId !== $id && isset($store['configs'][$newId])) {
+        jsonResponse(['error' => 'Konfigurations-ID bereits vorhanden.'], 409);
         return;
     }
-    jsonResponse(['ok' => true]);
+    $config['updatedAt'] = gmdate(DATE_ATOM);
+    unset($store['configs'][$id]);
+    $store['configs'][$newId] = $config;
+    if (!saveSharedConfigsStore($store)) {
+        jsonResponse(['error' => 'Konfiguration konnte nicht umbenannt werden.'], 500);
+        return;
+    }
+    jsonResponse(['ok' => true, 'id' => $newId]);
     return;
 }
 
