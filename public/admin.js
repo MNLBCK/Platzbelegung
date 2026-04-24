@@ -159,105 +159,6 @@
       .sort((a, b) => b.hits - a.hits || a.configId.localeCompare(b.configId));
   }
 
-  function parseConfigHits(paths) {
-    const counts = new Map();
-    (paths || []).forEach((row) => {
-      const rawPath = String(row.path || '');
-      const hits = Number(row.hits || 0);
-      let url;
-      try {
-        url = new URL(rawPath, window.location.origin);
-      } catch (e) {
-        return;
-      }
-      const configId = (url.searchParams.get('config') || '').trim();
-      if (!configId) return;
-      counts.set(configId, (counts.get(configId) || 0) + hits);
-    });
-    return Array.from(counts.entries())
-      .map(([configId, hits]) => ({ configId, hits }))
-      .sort((a, b) => b.hits - a.hits || a.configId.localeCompare(b.configId));
-  }
-
-  function renderConfigHits(hits) {
-    const rows = parseConfigHits(hits.paths);
-    const body = $('config-hits-body');
-    body.innerHTML = '';
-
-    if (!rows.length) {
-      const tr = document.createElement('tr');
-      const td = document.createElement('td');
-      td.colSpan = 3;
-      td.textContent = 'Keine aufgerufenen Konfigurationen gefunden.';
-      tr.appendChild(td);
-      body.appendChild(tr);
-    } else {
-      rows.forEach((row) => {
-        const tr = document.createElement('tr');
-
-        const idCell = document.createElement('td');
-        const idCode = document.createElement('code');
-        idCode.textContent = row.configId;
-        idCell.appendChild(idCode);
-
-        const hitsCell = document.createElement('td');
-        hitsCell.textContent = String(row.hits);
-
-        const linkCell = document.createElement('td');
-        const link = document.createElement('a');
-        link.href = '/?config=' + encodeURIComponent(row.configId);
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = 'öffnen';
-        linkCell.appendChild(link);
-
-        tr.appendChild(idCell);
-        tr.appendChild(hitsCell);
-        tr.appendChild(linkCell);
-        body.appendChild(tr);
-      });
-    }
-
-    $('config-hits-meta').textContent = 'Gefundene Konfigurationen: ' + rows.length;
-  }
-
-  function renderHits(hits) {
-    const toggle = $('hits-toggle');
-    const body = $('hits-body');
-    body.innerHTML = '';
-    const rows = hits.paths || [];
-    const visibleRows = showAllHits ? rows : rows.slice(0, 10);
-
-    visibleRows.forEach((row) => {
-      const tr = document.createElement('tr');
-      const pathCell = document.createElement('td');
-      const code = document.createElement('code');
-      code.textContent = row.path || '/';
-      pathCell.appendChild(code);
-
-      const hitsCell = document.createElement('td');
-      hitsCell.textContent = String(row.hits || 0);
-
-      tr.appendChild(pathCell);
-      tr.appendChild(hitsCell);
-      body.appendChild(tr);
-    });
-    $('hits-meta').textContent = 'Gesamt: ' + (hits.total || 0) + ' Hits, aktualisiert: ' + fmt(hits.updatedAt);
-
-    if (toggle) {
-      if (rows.length > 10) {
-        toggle.style.display = 'inline-block';
-        toggle.textContent = showAllHits ? 'Weniger anzeigen' : 'Weitere anzeigen';
-        toggle.onclick = () => {
-          showAllHits = !showAllHits;
-          renderHits(hits);
-        };
-      } else {
-        toggle.style.display = 'none';
-        toggle.onclick = null;
-      }
-    }
-  }
 
   async function loadDashboard() {
     const password = $('password').value.trim();
@@ -289,8 +190,8 @@
       return;
     }
 
-    renderStats(data.stats || {}, data.pageHits || {});
-    renderHits(data.pageHits || {});
+    renderStats(data.stats || {});
+    $('config-json').textContent = JSON.stringify(data.config || {}, null, 2);
     $('content').style.display = 'block';
   }
 

@@ -142,14 +142,13 @@ php -S 0.0.0.0:3210 backend.php
 | Endpunkt | Beschreibung |
 |---|---|
 | `GET /` | Web-UI (public/index.html) |
-| `GET /admin` | Passwortgeschützte Admin-Webseite (Statistik, Page Hits, Konfiguration) |
+| `GET /admin` | Passwortgeschützte Admin-Webseite (Statistik, Konfiguration) |
 | `GET /api/snapshot` | Vollständiger aktuellster Snapshot (JSON) |
 | `GET /api/games?venueId=ID` | Spiele einer oder mehrerer Sportstätten |
 | `GET /api/search?q=Name` | Sportstätten auf fussball.de suchen |
 | `GET /api/admin/club-parse-stats?password=...` | Anonyme Nutzungsstatistik pro Verein (sortiert nach Parse-Anzahl) |
 | `GET /api/admin/config?password=...` | Vollständige bestehende `config.yaml` (passwortgeschützt) |
-| `GET /api/admin/page-hits?password=...` | Aggregierte Seitenaufrufe pro Pfad |
-| `GET /api/admin/dashboard?password=...` | Kombinierte Admin-Daten (Statistik, Page Hits, Konfiguration) |
+| `GET /api/admin/dashboard?password=...` | Kombinierte Admin-Daten (Statistik, Konfiguration) |
 | `GET /api/demo` | Demo-Daten (kein Snapshot erforderlich) |
 
 Für die Statistik muss serverseitig ein Passwort gesetzt sein (nicht im Git):

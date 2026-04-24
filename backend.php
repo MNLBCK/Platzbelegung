@@ -9,7 +9,6 @@ const CONFIG_FILE = __DIR__ . '/config.yaml';
 const VERSION_FILE = __DIR__ . '/VERSION';
 const BUILD_META_FILE = __DIR__ . '/BUILD_META.json';
 const USAGE_STATS_FILE = DATA_DIR . '/club_parse_stats.json';
-const PAGE_HITS_FILE = DATA_DIR . '/page_hits.json';
 const STATS_PASSWORD_FILE = __DIR__ . '/.stats_password';
 const APP_REPOSITORY_URL = 'https://github.com/MNLBCK/Platzbelegung';
 const APP_RELEASES_URL = APP_REPOSITORY_URL . '/releases/tag/';
@@ -288,92 +287,6 @@ function saveUsageStats(array $stats): bool
         return false;
     }
     return file_put_contents(USAGE_STATS_FILE, $json . PHP_EOL, LOCK_EX) !== false;
-}
-
-function loadPageHits(): array
-{
-    if (!is_file(PAGE_HITS_FILE)) {
-        return ['updatedAt' => null, 'total' => 0, 'paths' => []];
-    }
-    $raw = file_get_contents(PAGE_HITS_FILE);
-    if ($raw === false) {
-        return ['updatedAt' => null, 'total' => 0, 'paths' => []];
-    }
-    $parsed = json_decode($raw, true);
-    if (!is_array($parsed)) {
-        return ['updatedAt' => null, 'total' => 0, 'paths' => []];
-    }
-    $paths = $parsed['paths'] ?? [];
-    if (!is_array($paths)) {
-        $paths = [];
-    }
-    return [
-        'updatedAt' => $parsed['updatedAt'] ?? null,
-        'total' => (int)($parsed['total'] ?? 0),
-        'paths' => $paths,
-    ];
-}
-
-function savePageHits(array $hits): bool
-{
-    if (!is_dir(DATA_DIR) && !mkdir(DATA_DIR, 0775, true) && !is_dir(DATA_DIR)) {
-        return false;
-    }
-    $json = json_encode($hits, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false) {
-        return false;
-    }
-    return file_put_contents(PAGE_HITS_FILE, $json . PHP_EOL, LOCK_EX) !== false;
-}
-
-function shouldTrackPageHit(string $uri): bool
-{
-    $path = parse_url($uri, PHP_URL_PATH) ?: '/';
-    if (str_starts_with($path, '/api/admin/')) {
-        return false;
-    }
-    if ($path === '/admin' || $path === '/admin.html') {
-        return false;
-    }
-    return true;
-}
-
-function normalizeTrackedPageHit(string $path, array $query): string
-{
-    $configId = trim((string)($query['config'] ?? ''));
-    if ($configId !== '') {
-        return $path . '?config=' . rawurlencode($configId);
-    }
-    return $path;
-}
-
-function recordPageHit(string $uri): void
-{
-    if (!shouldTrackPageHit($uri)) {
-        return;
-    }
-    $hits = loadPageHits();
-    $paths = $hits['paths'] ?? [];
-    $paths[$uri] = ((int)($paths[$uri] ?? 0)) + 1;
-    arsort($paths);
-    $hits['paths'] = $paths;
-    $hits['total'] = ((int)($hits['total'] ?? 0)) + 1;
-    $hits['updatedAt'] = gmdate(DATE_ATOM);
-    savePageHits($hits);
-}
-
-function buildPageHitsResponse(array $hits): array
-{
-    $paths = [];
-    foreach (($hits['paths'] ?? []) as $path => $count) {
-        $paths[] = ['path' => (string)$path, 'hits' => (int)$count];
-    }
-    usort($paths, fn(array $a, array $b): int => ($b['hits'] <=> $a['hits']) ?: strcmp($a['path'], $b['path']));
-    return [
-        'updatedAt' => $hits['updatedAt'] ?? null,
-        'total' => (int)($hits['total'] ?? 0),
-        'paths' => $paths,
-    ];
 }
 
 function recordClubParse(string $clubId, string $clubName = '', string $clubLogoUrl = '', string $clubLocation = ''): void
@@ -869,7 +782,6 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '/');
 $uri = parse_url($requestUri, PHP_URL_PATH) ?: '/';
 parse_str(parse_url($requestUri, PHP_URL_QUERY) ?: '', $query);
-recordPageHit(normalizeTrackedPageHit($uri, $query));
 
 // Public POST endpoint for submitting requests must be handled regardless of GET/HEAD block.
 if ($method === 'POST' && $uri === '/api/requests/submit') {
@@ -1074,17 +986,6 @@ if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/'))
         return;
     }
 
-    if ($uri === '/api/admin/page-hits') {
-        $providedPassword = (string)($query['password'] ?? '');
-        $authError = ensureStatsPasswordAuthorized($providedPassword);
-        if ($authError !== null) {
-            jsonResponse(['error' => $authError['error']], (int)$authError['status']);
-            return;
-        }
-        jsonResponse(buildPageHitsResponse(loadPageHits()));
-        return;
-    }
-
     if ($uri === '/api/admin/dashboard') {
         $providedPassword = (string)($query['password'] ?? '');
         $authError = ensureStatsPasswordAuthorized($providedPassword);
@@ -1095,7 +996,6 @@ if (($method === 'GET' || $method === 'HEAD') && str_starts_with($uri, '/api/'))
         $config = loadConfig();
         jsonResponse([
             'stats' => buildStatsResponse(loadUsageStats()),
-            'pageHits' => buildPageHitsResponse(loadPageHits()),
             'config' => $config === null ? null : $config,
             'configAvailable' => $config !== null,
         ]);
