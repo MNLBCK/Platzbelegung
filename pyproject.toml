@@ -30,7 +30,7 @@ platzbelegung = "platzbelegung.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"platzbelegung" = ["templates/*.html.j2"]
+"platzbelegung" = ["templates/*.html.j2", "*.php"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

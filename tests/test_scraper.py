@@ -1,149 +1,266 @@
-"""Tests für den FussballDeScraper (scraper.py)."""
+"""Tests für den FussballDeScraper (scraper.py).
+
+Der Scraper delegiert das gesamte HTML-Parsing an PHP (parse_matchplan.php).
+Die Tests prüfen:
+- Das korrekte Aufrufen des PHP-Subprozesses (über subprocess.run-Mock)
+- Die Konvertierung der PHP-JSON-Ausgabe in ScrapedGame-Objekte
+- Fehlerbehandlung (PHP nicht gefunden, Fehler-Exit-Code, ungültiges JSON)
+- Die reinen Python-Hilfsfunktionen (Venue-Filterung, Normalisierung)
+"""
 
 from __future__ import annotations
 
-from datetime import datetime
+import json
+import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from platzbelegung.scraper import (
     FussballDeScraper,
-    _is_cancelled_game_status,
-    _is_placeholder_team,
+    _find_php_script,
     _normalize_venue_name,
-    _parse_german_datetime,
     filter_games_by_venue_configs,
     filter_games_by_venues,
 )
 
 
 # ---------------------------------------------------------------------------
-# Hilfsfunktionen
+# PHP-Skript-Suche
 # ---------------------------------------------------------------------------
 
-def _mock_response(html: str, content_type: str = "text/html") -> MagicMock:
+class TestFindPhpScript:
+    def test_finds_script_in_package_directory(self):
+        """parse_matchplan.php wird im Package-Verzeichnis gefunden (bundled standalone)."""
+        script = _find_php_script()
+        assert script is not None
+        assert script.name == "parse_matchplan.php"
+        assert script.exists()
+        # The package-bundled version is in the same directory as scraper.py
+        from pathlib import Path
+        import platzbelegung.scraper as _mod
+        pkg_dir = Path(_mod.__file__).parent
+        assert script == pkg_dir / "parse_matchplan.php"
+
+    def test_env_var_overrides_default(self, tmp_path, monkeypatch):
+        """PLATZBELEGUNG_PHP_SCRIPT überschreibt den Standard-Pfad."""
+        fake = tmp_path / "custom_parse.php"
+        fake.write_text("<?php echo '[]';")
+        monkeypatch.setenv("PLATZBELEGUNG_PHP_SCRIPT", str(fake))
+        script = _find_php_script()
+        assert script == fake
+
+    def test_env_var_missing_file_ignored(self, monkeypatch):
+        """Nicht existente Datei in PLATZBELEGUNG_PHP_SCRIPT wird ignoriert."""
+        monkeypatch.setenv("PLATZBELEGUNG_PHP_SCRIPT", "/nonexistent/parse.php")
+        # Sollte auf Standard-Pfad fallen zurück
+        script = _find_php_script()
+        # Kann None sein wenn auch Standardpfad fehlt, aber nicht crashen
+        assert script is None or script.exists()
+
+    def test_package_bundled_script_is_standalone(self):
+        """Die im Package gebundelte parse_matchplan.php hat keine require-Abhängigkeit zu backend.php."""
+        from pathlib import Path
+        import platzbelegung.scraper as _mod
+        pkg_script = Path(_mod.__file__).parent / "parse_matchplan.php"
+        assert pkg_script.exists()
+        content = pkg_script.read_text(encoding="utf-8")
+        # Standalone: darf kein require __DIR__ . '/backend.php' haben
+        assert "require __DIR__" not in content
+
+
+# ---------------------------------------------------------------------------
+# FussballDeScraper – scrape_club_matchplan via PHP-Subprocess
+# ---------------------------------------------------------------------------
+
+def _make_subprocess_result(
+    stdout: bytes = b"[]",
+    returncode: int = 0,
+    stderr: bytes = b"",
+) -> MagicMock:
+    """Erstellt ein Mock-CompletedProcess-Objekt."""
     mock = MagicMock()
-    mock.text = html
-    mock.headers = {"content-type": content_type}
-    mock.raise_for_status.return_value = None
+    mock.stdout = stdout
+    mock.returncode = returncode
+    mock.stderr = stderr
     return mock
 
 
-# ---------------------------------------------------------------------------
-# _parse_german_datetime
-# ---------------------------------------------------------------------------
-
-class TestParseGermanDatetime:
-    def test_full_date_and_time(self):
-        dt = _parse_german_datetime("28.03.2026", "14:00")
-        assert dt == datetime(2026, 3, 28, 14, 0)
-
-    def test_date_without_time(self):
-        dt = _parse_german_datetime("01.01.2026", "")
-        assert dt == datetime(2026, 1, 1, 0, 0)
-
-    def test_invalid_date_returns_none(self):
-        assert _parse_german_datetime("not-a-date", "12:00") is None
-
-    def test_empty_string_returns_none(self):
-        assert _parse_german_datetime("", "") is None
-
-
-# ---------------------------------------------------------------------------
-# FussballDeScraper – scrape_venue_games
-# ---------------------------------------------------------------------------
-
-_TABLE_HTML = """
-<html><body>
-  <h1 class="headline">Kunstrasenplatz</h1>
-  <table class="table-striped">
-    <tbody>
-      <tr>
-        <td>28.03.2026</td>
-        <td>14:00</td>
-        <td>SKV Hochberg</td>
-        <td></td>
-        <td>FC Muster</td>
-        <td>Kreisliga A</td>
-      </tr>
-      <tr>
-        <td>05.04.2026</td>
-        <td>10:00</td>
-        <td>SKV Hochberg II</td>
-        <td></td>
-        <td>SV Test</td>
-        <td>Kreisliga B</td>
-      </tr>
-    </tbody>
-  </table>
-</body></html>
-"""
+_SAMPLE_PHP_OUTPUT = json.dumps([
+    {
+        "venueId": "kunstrasenplatz",
+        "venueName": "Kunstrasenplatz",
+        "date": "28.03.2026",
+        "time": "14:00",
+        "homeTeam": "SKV Hochberg",
+        "guestTeam": "FC Muster",
+        "competition": "Kreisliga A",
+        "startDate": "2026-03-28T14:00:00+02:00",
+        "homeLogoUrl": "",
+        "guestLogoUrl": "",
+        "result": "",
+        "gameUrl": "",
+    },
+    {
+        "venueId": "rasenplatz",
+        "venueName": "Rasenplatz",
+        "date": "05.04.2026",
+        "time": "16:00",
+        "homeTeam": "SKV Hochberg II",
+        "guestTeam": "SV Test",
+        "competition": "Kreisliga B",
+        "startDate": "2026-04-05T16:00:00+02:00",
+        "homeLogoUrl": "",
+        "guestLogoUrl": "",
+        "result": "",
+        "gameUrl": "",
+    },
+]).encode()
 
 
-class TestScrapeVenueGames:
-    def test_parses_table_rows(self):
+class TestScrapeClubMatchplan:
+    def test_calls_php_subprocess(self):
+        """scrape_club_matchplan ruft php parse_matchplan.php mit korrekten Argumenten auf."""
         scraper = FussballDeScraper()
-        with patch.object(scraper._session, "get", return_value=_mock_response(_TABLE_HTML)):
-            games = scraper.scrape_venue_games("VENUE001")
+        with patch("subprocess.run", return_value=_make_subprocess_result(_SAMPLE_PHP_OUTPUT)) as mock_run:
+            games = scraper.scrape_club_matchplan("CLUB001")
+
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert isinstance(cmd, list), "Erster Positional-Arg muss eine Liste sein"
+        assert cmd[0] == "php"
+        assert cmd[1].endswith("parse_matchplan.php")
+        assert "--id=CLUB001" in cmd
+        assert any(a.startswith("--date-from=") for a in cmd)
+        assert any(a.startswith("--date-to=") for a in cmd)
+        # scraper.timeout_seconds wird als --timeout weitergereicht (Fix P2)
+        assert any(a.startswith("--timeout=") for a in cmd)
+
+    def test_parses_php_json_output(self):
+        """PHP-JSON-Ausgabe wird korrekt in ScrapedGame-Objekte konvertiert."""
+        scraper = FussballDeScraper()
+        with patch("subprocess.run", return_value=_make_subprocess_result(_SAMPLE_PHP_OUTPUT)):
+            games = scraper.scrape_club_matchplan("CLUB001")
 
         assert len(games) == 2
         g = games[0]
-        assert g.venue_id == "VENUE001"
+        assert g.venue_id == "kunstrasenplatz"
         assert g.venue_name == "Kunstrasenplatz"
         assert g.date == "28.03.2026"
         assert g.time == "14:00"
         assert g.home_team == "SKV Hochberg"
         assert g.guest_team == "FC Muster"
         assert g.competition == "Kreisliga A"
-        assert g.start_date == "2026-03-28T14:00:00"
-        assert g.scraped_at  # non-empty timestamp
 
-    def test_scraped_at_is_utc_iso(self):
+    def test_scraped_at_is_set(self):
+        """scraped_at wird für alle zurückgegebenen Spiele gesetzt."""
         scraper = FussballDeScraper()
-        with patch.object(scraper._session, "get", return_value=_mock_response(_TABLE_HTML)):
-            games = scraper.scrape_venue_games("X")
-        for game in games:
-            assert "T" in game.scraped_at  # looks like ISO 8601
+        with patch("subprocess.run", return_value=_make_subprocess_result(_SAMPLE_PHP_OUTPUT)):
+            games = scraper.scrape_club_matchplan("CLUB001")
 
-    def test_empty_page_returns_empty_list(self):
-        html = "<html><body><h1 class='headline'>Leer</h1></body></html>"
+        for g in games:
+            assert g.scraped_at  # nicht leer
+            assert "T" in g.scraped_at  # sieht wie ISO 8601 aus
+
+    def test_empty_output_returns_empty_list(self):
+        """Leere PHP-Ausgabe ergibt leere Spiele-Liste."""
         scraper = FussballDeScraper()
-        with patch.object(scraper._session, "get", return_value=_mock_response(html)):
-            games = scraper.scrape_venue_games("EMPTY")
+        with patch("subprocess.run", return_value=_make_subprocess_result(b"[]")):
+            games = scraper.scrape_club_matchplan("CLUB001")
+
         assert games == []
 
-
-# ---------------------------------------------------------------------------
-# FussballDeScraper – Fallback-Parser
-# ---------------------------------------------------------------------------
-
-_FIXTURE_HTML = """
-<html><body>
-  <h2 class="headline">Rasenplatz</h2>
-  <div class="fixture-list-item">
-    <span class="date">12.04.2026</span>
-    <span class="time">11:00</span>
-    <span class="home-team">TSV Alpha</span>
-    <span class="guest-team">VfB Beta</span>
-    <span class="competition">B-Junioren</span>
-  </div>
-</body></html>
-"""
-
-
-class TestScrapeVenueGamesFallback:
-    def test_parses_fixture_items(self):
+    def test_php_not_found_raises_runtime_error(self):
+        """Fehlendes PHP-Binary löst RuntimeError aus."""
         scraper = FussballDeScraper()
-        with patch.object(scraper._session, "get", return_value=_mock_response(_FIXTURE_HTML)):
-            games = scraper.scrape_venue_games("V2")
+        with patch("subprocess.run", side_effect=FileNotFoundError("php not found")):
+            with pytest.raises(RuntimeError, match="PHP-Binary"):
+                scraper.scrape_club_matchplan("CLUB001")
+
+    def test_php_script_not_found_raises_runtime_error(self):
+        """Fehlendes parse_matchplan.php löst RuntimeError aus."""
+        scraper = FussballDeScraper()
+        scraper._php_script = None
+        with pytest.raises(RuntimeError, match="parse_matchplan.php"):
+            scraper.scrape_club_matchplan("CLUB001")
+
+    def test_php_error_exit_raises_runtime_error(self):
+        """Nicht-Null-Exit-Code vom PHP-Prozess löst RuntimeError aus."""
+        scraper = FussballDeScraper()
+        err_result = _make_subprocess_result(b"", returncode=1, stderr=b"Fehler beim Abrufen")
+        with patch("subprocess.run", return_value=err_result):
+            with pytest.raises(RuntimeError, match="PHP-Parser-Fehler"):
+                scraper.scrape_club_matchplan("CLUB001")
+
+    def test_invalid_json_raises_runtime_error(self):
+        """Ungültige JSON-Ausgabe vom PHP-Prozess löst RuntimeError aus."""
+        scraper = FussballDeScraper()
+        with patch("subprocess.run", return_value=_make_subprocess_result(b"not json")):
+            with pytest.raises(RuntimeError, match="Ungültige JSON-Ausgabe"):
+                scraper.scrape_club_matchplan("CLUB001")
+
+    def test_limit_is_respected(self):
+        """limit begrenzt die Anzahl der zurückgegebenen Spiele."""
+        many_games = json.dumps([
+            {
+                "venueId": f"v{i}", "venueName": f"Platz {i}",
+                "date": "01.04.2026", "time": "10:00",
+                "homeTeam": f"Team {i}", "guestTeam": "Gegner",
+                "competition": "Liga", "startDate": "2026-04-01T10:00:00+02:00",
+            }
+            for i in range(50)
+        ]).encode()
+
+        scraper = FussballDeScraper()
+        with patch("subprocess.run", return_value=_make_subprocess_result(many_games)):
+            games = scraper.scrape_club_matchplan("CLUB001", limit=10)
+
+        assert len(games) == 10
+
+    def test_max_parameter_passed_to_php(self):
+        """--max wird als min(limit, 200) an PHP übergeben."""
+        scraper = FussballDeScraper()
+        with patch("subprocess.run", return_value=_make_subprocess_result(b"[]")) as mock_run:
+            scraper.scrape_club_matchplan("CLUB001", limit=50)
+
+        cmd = mock_run.call_args[0][0]
+        assert "--max=50" in cmd
+
+    def test_max_capped_at_200(self):
+        """--max wird auf maximal 200 begrenzt."""
+        scraper = FussballDeScraper()
+        with patch("subprocess.run", return_value=_make_subprocess_result(b"[]")) as mock_run:
+            scraper.scrape_club_matchplan("CLUB001", limit=999)
+
+        cmd = mock_run.call_args[0][0]
+        assert "--max=200" in cmd
+
+    def test_timeout_raised_as_runtime_error(self):
+        """TimeoutExpired wird in RuntimeError umgewandelt."""
+        scraper = FussballDeScraper()
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("php", 45)):
+            with pytest.raises(RuntimeError, match="Timeout"):
+                scraper.scrape_club_matchplan("CLUB001")
+
+    def test_unknown_fields_in_php_output_ignored(self):
+        """Unbekannte Felder in der PHP-Ausgabe (z.B. homeLogoUrl) werden ignoriert."""
+        output = json.dumps([{
+            "venueId": "v1", "venueName": "Platz",
+            "date": "01.04.2026", "time": "10:00",
+            "homeTeam": "Home", "guestTeam": "Away",
+            "competition": "Liga", "startDate": "2026-04-01T10:00:00+02:00",
+            "homeLogoUrl": "https://example.com/logo.png",
+            "guestLogoUrl": "",
+            "result": "2:1",
+            "gameUrl": "https://www.fussball.de/spiel/...",
+        }]).encode()
+        scraper = FussballDeScraper()
+        with patch("subprocess.run", return_value=_make_subprocess_result(output)):
+            games = scraper.scrape_club_matchplan("CLUB001")
 
         assert len(games) == 1
-        g = games[0]
-        assert g.home_team == "TSV Alpha"
-        assert g.guest_team == "VfB Beta"
-        assert g.competition == "B-Junioren"
-        assert g.venue_name == "Rasenplatz"
+        assert games[0].home_team == "Home"
 
 
 # ---------------------------------------------------------------------------
@@ -170,333 +287,6 @@ class TestScrapedGameSerialization:
         assert g2.venue_id == g.venue_id
         assert g2.home_team == g.home_team
         assert g2.start_date == g.start_date
-
-
-# ---------------------------------------------------------------------------
-# FussballDeScraper – scrape_club_matchplan (JSON)
-# ---------------------------------------------------------------------------
-
-_MATCHPLAN_JSON = {
-    "matches": [
-        {
-            "venue": {"id": "VENUE001", "name": "Kunstrasenplatz"},
-            "date": "28.03.2026",
-            "time": "14:00",
-            "homeTeam": {"name": "SKV Hochberg"},
-            "awayTeam": {"name": "FC Muster"},
-            "competition": {"name": "Kreisliga A"},
-        },
-        {
-            "venue": {"id": "VENUE002", "name": "Rasenplatz"},
-            "date": "05.04.2026",
-            "time": "16:00",
-            "homeTeam": {"name": "SKV Hochberg II"},
-            "awayTeam": {"name": "SV Test"},
-            "competition": {"name": "Kreisliga B"},
-        },
-    ]
-}
-
-_REAL_MATCHPLAN_HTML_WITHOUT_VENUES = """
-<div data-ng-controller="AjaxController" id="id-club-matchplan-table" class="fixtures-matches">
-  <div class="table-container fixtures-matches-table club-matchplan-table">
-    <table class="table table-striped table-full-width">
-      <tbody>
-        <tr class="odd row-competition hidden-small">
-          <td class="column-date"><span class="hidden-small inline">So, 12.04.26 |&nbsp;</span>15:00</td>
-          <td colspan="3" class="column-team">
-            <a>Herren | Kreisliga A; Kreisliga</a>
-          </td>
-          <td colspan="2">
-            <a>ME | 355926184</a>
-          </td>
-        </tr>
-        <tr class="odd">
-          <td class="hidden-small"></td>
-          <td class="column-club">
-            <a class="club-wrapper">
-              <div class="club-name">SGM Hochberg/&#8203;Hochdorf</div>
-            </a>
-          </td>
-          <td class="column-colon">:</td>
-          <td class="column-club no-border">
-            <a class="club-wrapper">
-              <div class="club-name">VfB Neckarrems 1913 e.V.</div>
-            </a>
-          </td>
-          <td class="column-score"></td>
-          <td class="column-detail"></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-"""
-
-_MATCH_DETAIL_HTML_WITH_VENUE = """
-<html><body>
-  <a href="https://www.google.de/maps?q=Kreuzwiesenweg%2C+74850+Schefflenz" class="location" target="_blank">
-    Rasenplatz, Unterschefflenz, Kreuzwiesenweg, 74850 Schefflenz
-  </a>
-</body></html>
-"""
-
-_REAL_MATCHPLAN_HTML_WITH_DETAIL_LINK_BUT_NO_VENUE = """
-<div data-ng-controller="AjaxController" id="id-club-matchplan-table" class="fixtures-matches">
-  <div class="table-container fixtures-matches-table club-matchplan-table">
-    <table class="table table-striped table-full-width">
-      <tbody>
-        <tr class="odd row-competition hidden-small">
-          <td class="column-date"><span class="hidden-small inline">So, 26.04.26 |&nbsp;</span>11:00</td>
-          <td colspan="3" class="column-team">
-            <a>D-Junioren | Landesliga</a>
-          </td>
-          <td colspan="2">
-            <a>ME | 320487020</a>
-          </td>
-        </tr>
-        <tr class="odd">
-          <td class="hidden-small"></td>
-          <td class="column-club">
-            <a class="club-wrapper">
-              <div class="club-name">JSG Seckach/&#8203;Schefflenz</div>
-            </a>
-          </td>
-          <td class="column-colon">:</td>
-          <td class="column-club no-border">
-            <a class="club-wrapper">
-              <div class="club-name">VfK Diedesheim</div>
-            </a>
-          </td>
-          <td class="column-score">
-            <a href="https://www.fussball.de/spiel/jsg-seckach-schefflenz-vfk-diedesheim/-/spiel/02VI0B8K74000000VS5489BTVVTMOPA6">
-              <span class="info-text">26.04.2026 11:00</span>
-            </a>
-          </td>
-          <td class="column-detail"></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-"""
-
-_REAL_MATCHPLAN_HTML_WITH_VENUES = """
-<div data-ng-controller="AjaxController" id="id-club-matchplan-table" class="fixtures-matches">
-  <div class="table-container fixtures-matches-table club-matchplan-table">
-    <table class="table table-striped table-full-width">
-      <tbody>
-        <tr class="odd row-competition hidden-small">
-          <td class="column-date"><span class="hidden-small inline">Sa, 11.04.26 |&nbsp;</span>12:00</td>
-          <td colspan="3" class="column-team">
-            <a>D-Junioren | Bezirksfreundschaftsspiele</a>
-          </td>
-          <td colspan="2">
-            <a>FS | 550068375</a>
-          </td>
-        </tr>
-        <tr class="odd">
-          <td class="hidden-small"></td>
-          <td class="column-club">
-            <a class="club-wrapper">
-              <div class="club-name">SGM VfB Neckarrems/&#8203;SKV Hochberg/&#8203;SGV Hochdorf I</div>
-            </a>
-          </td>
-          <td class="column-colon">:</td>
-          <td class="column-club no-border">
-            <a class="club-wrapper">
-              <div class="club-name">SV Fellbach III U12P</div>
-            </a>
-          </td>
-          <td class="column-score"></td>
-          <td class="column-detail"></td>
-        </tr>
-        <tr class="odd row-venue hidden-small">
-          <td></td>
-          <td colspan="3">Kunstrasenplatz, GWV-Sportpark (Kunstrasen), Hummelberg 4, 71686 Remseck am Neckar</td>
-          <td></td>
-        </tr>
-        <tr class="row-competition hidden-small">
-          <td class="column-date"><span class="hidden-small inline">So, 12.04.26 |&nbsp;</span>15:00</td>
-          <td colspan="3" class="column-team">
-            <a>Herren | Kreisliga A; Kreisliga</a>
-          </td>
-          <td colspan="2">
-            <a>ME | 355926184</a>
-          </td>
-        </tr>
-        <tr>
-          <td class="hidden-small"></td>
-          <td class="column-club">
-            <a class="club-wrapper">
-              <div class="club-name">SGM Hochberg/&#8203;Hochdorf</div>
-            </a>
-          </td>
-          <td class="column-colon">:</td>
-          <td class="column-club no-border">
-            <a class="club-wrapper">
-              <div class="club-name">VfB Neckarrems 1913 e.V.</div>
-            </a>
-          </td>
-          <td class="column-score"></td>
-          <td class="column-detail"></td>
-        </tr>
-        <tr class="row-venue hidden-small">
-          <td></td>
-          <td colspan="3">Rasenplatz, Waldallee 70, Waldallee 70, 71686 Remseck am Neckar</td>
-          <td></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-"""
-
-
-class TestScrapeClubMatchplan:
-    def test_parses_json_response(self):
-        scraper = FussballDeScraper()
-        mock = MagicMock()
-        mock.headers = {"content-type": "application/json"}
-        mock.json.return_value = _MATCHPLAN_JSON
-        mock.raise_for_status.return_value = None
-
-        with patch.object(scraper._session, "get", return_value=mock):
-            games = scraper.scrape_club_matchplan("CLUB001")
-
-        assert len(games) == 2
-        g = games[0]
-        assert g.venue_id == "VENUE001"
-        assert g.venue_name == "Kunstrasenplatz"
-        assert g.date == "28.03.2026"
-        assert g.time == "14:00"
-        assert g.home_team == "SKV Hochberg"
-        assert g.guest_team == "FC Muster"
-        assert g.competition == "Kreisliga A"
-        assert g.start_date == "2026-03-28T14:00:00"
-
-    def test_parses_html_response(self):
-        """Test HTML fragment parsing from ajax.club.matchplan."""
-        html = """
-        <div class="match-row" data-venue-id="V123">
-            <span class="date">10.04.2026</span>
-            <span class="time">15:30</span>
-            <span class="home-team">Team A</span>
-            <span class="guest-team">Team B</span>
-            <span class="competition">Bezirksliga</span>
-            <span class="venue-name">Sportplatz Nord</span>
-        </div>
-        """
-        scraper = FussballDeScraper()
-        mock = MagicMock()
-        mock.headers = {"content-type": "text/html"}
-        mock.text = html
-        mock.raise_for_status.return_value = None
-
-        with patch.object(scraper._session, "get", return_value=mock):
-            games = scraper.scrape_club_matchplan("CLUB002")
-
-        assert len(games) == 1
-        g = games[0]
-        assert g.venue_id == "V123"
-        assert g.home_team == "Team A"
-        assert g.guest_team == "Team B"
-
-    def test_parses_real_matchplan_page_without_venue_rows(self):
-        """The exact show-filter=false page has no venue rows, but games must still parse."""
-        scraper = FussballDeScraper()
-        with patch.object(
-            scraper._session,
-            "get",
-            return_value=_mock_response(_REAL_MATCHPLAN_HTML_WITHOUT_VENUES),
-        ):
-            games = scraper.scrape_club_matchplan("00ES8GNAVO00000PVV0AG08LVUPGND5I")
-
-        assert len(games) == 1
-        assert games[0].date == "12.04.2026"
-        assert games[0].time == "15:00"
-        assert games[0].home_team == "SGM Hochberg/Hochdorf"
-        assert games[0].guest_team == "VfB Neckarrems 1913 e.V."
-        assert games[0].competition == "Herren | Kreisliga A; Kreisliga"
-        assert games[0].venue_name == ""
-
-    def test_falls_back_to_game_detail_page_for_missing_venue(self):
-        scraper = FussballDeScraper()
-
-        def mock_get(url, *args, **kwargs):
-            if "02VI0B8K74000000VS5489BTVVTMOPA6" in url:
-                return _mock_response(_MATCH_DETAIL_HTML_WITH_VENUE)
-            return _mock_response(_REAL_MATCHPLAN_HTML_WITH_DETAIL_LINK_BUT_NO_VENUE)
-
-        with patch.object(scraper._session, "get", side_effect=mock_get):
-            games = scraper.scrape_club_matchplan("00ES8GN9B8000042VV0AG08LVUPGND5I")
-
-        assert len(games) == 1
-        assert games[0].home_team == "JSG Seckach/Schefflenz"
-        assert games[0].guest_team == "VfK Diedesheim"
-        assert games[0].venue_name == "Rasenplatz, Unterschefflenz, Kreuzwiesenweg, 74850 Schefflenz"
-
-    def test_parses_real_matchplan_page_and_extracts_venues(self):
-        """show-venues=true adds row-venue rows that must be assigned to the previous game."""
-        scraper = FussballDeScraper()
-        with patch.object(
-            scraper._session,
-            "get",
-            return_value=_mock_response(_REAL_MATCHPLAN_HTML_WITH_VENUES),
-        ):
-            games = scraper.scrape_club_matchplan("00ES8GNAVO00000PVV0AG08LVUPGND5I")
-
-        assert len(games) == 2
-        assert games[0].date == "11.04.2026"
-        assert games[0].time == "12:00"
-        assert games[0].home_team == "SGM VfB Neckarrems/SKV Hochberg/SGV Hochdorf I"
-        assert games[0].guest_team == "SV Fellbach III U12P"
-        assert games[0].venue_name == "Kunstrasenplatz, GWV-Sportpark (Kunstrasen), Hummelberg 4, 71686 Remseck am Neckar"
-        assert games[1].date == "12.04.2026"
-        assert games[1].time == "15:00"
-        assert games[1].home_team == "SGM Hochberg/Hochdorf"
-        assert games[1].guest_team == "VfB Neckarrems 1913 e.V."
-        assert games[1].venue_name == "Rasenplatz, Waldallee 70, Waldallee 70, 71686 Remseck am Neckar"
-
-    def test_pagination_stops_on_empty_response(self):
-        """Test that pagination stops when no more games are returned."""
-        scraper = FussballDeScraper()
-        call_count = 0
-
-        # Create a larger first page (20+ items) to trigger pagination
-        large_match_list = {
-            "matches": [
-                {
-                    "venue": {"id": f"V{i:03d}", "name": f"Venue {i}"},
-                    "date": "01.04.2026",
-                    "time": "10:00",
-                    "homeTeam": {"name": f"Team Home {i}"},
-                    "awayTeam": {"name": f"Team Away {i}"},
-                    "competition": {"name": "Liga"},
-                }
-                for i in range(25)  # More than 20 to trigger pagination
-            ]
-        }
-
-        def mock_get(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            mock = MagicMock()
-            mock.headers = {"content-type": "application/json"}
-            if call_count == 1:
-                mock.json.return_value = large_match_list
-            else:
-                # Second call returns empty
-                mock.json.return_value = {"matches": []}
-            mock.raise_for_status.return_value = None
-            return mock
-
-        with patch.object(scraper._session, "get", side_effect=mock_get):
-            games = scraper.scrape_club_matchplan("CLUB003", limit=100)
-
-        # Should have fetched first page and tried second
-        assert len(games) == 25
-        assert call_count == 2  # Initial + one more attempt
 
 
 # ---------------------------------------------------------------------------
@@ -727,256 +517,3 @@ class TestFilterGamesByVenueConfigs:
         result = filter_games_by_venue_configs(games, [vc])
         assert len(result) == 2
         assert all(g.venue_id == "V_HOME" for g in result)
-
-
-# ---------------------------------------------------------------------------
-# _is_placeholder_team
-# ---------------------------------------------------------------------------
-
-class TestIsPlaceholderTeam:
-    def test_spielfrei_lowercase(self):
-        assert _is_placeholder_team("spielfrei") is True
-
-    def test_spielfrei_mixed_case(self):
-        assert _is_placeholder_team("Spielfrei") is True
-        assert _is_placeholder_team("SPIELFREI") is True
-
-    def test_spielfrei_with_whitespace(self):
-        assert _is_placeholder_team("  spielfrei  ") is True
-
-    def test_bye(self):
-        assert _is_placeholder_team("bye") is True
-        assert _is_placeholder_team("BYE") is True
-
-    def test_normal_team_name(self):
-        assert _is_placeholder_team("SKV Hochberg") is False
-        assert _is_placeholder_team("FC Muster") is False
-
-    def test_empty_string(self):
-        assert _is_placeholder_team("") is False
-
-
-class TestIsCancelledGameStatus:
-    def test_absetzung_lowercase(self):
-        assert _is_cancelled_game_status("absetzung") is True
-
-    def test_absetzung_mixed_case_and_whitespace(self):
-        assert _is_cancelled_game_status("  Absetzung  ") is True
-
-    def test_normal_result_not_cancelled(self):
-        assert _is_cancelled_game_status("2:1") is False
-        assert _is_cancelled_game_status("") is False
-
-
-# ---------------------------------------------------------------------------
-# Spielfrei-Filterung in den Parsern
-# ---------------------------------------------------------------------------
-
-_SPIELFREI_TABLE_HTML = """
-<html><body>
-  <h1 class="headline">Kunstrasenplatz</h1>
-  <table class="table-striped">
-    <tbody>
-      <tr>
-        <td>28.03.2026</td>
-        <td>14:00</td>
-        <td>SKV Hochberg</td>
-        <td></td>
-        <td>FC Muster</td>
-        <td>Kreisliga A</td>
-      </tr>
-      <tr>
-        <td>04.04.2026</td>
-        <td>11:00</td>
-        <td>SKV Hochberg II</td>
-        <td></td>
-        <td>spielfrei</td>
-        <td>Kreisliga B</td>
-      </tr>
-    </tbody>
-  </table>
-</body></html>
-"""
-
-_SPIELFREI_FIXTURE_HTML = """
-<html><body>
-  <h2 class="headline">Rasenplatz</h2>
-  <div class="fixture-list-item">
-    <span class="date">12.04.2026</span>
-    <span class="time">11:00</span>
-    <span class="home-team">TSV Alpha</span>
-    <span class="guest-team">VfB Beta</span>
-    <span class="competition">B-Junioren</span>
-  </div>
-  <div class="fixture-list-item">
-    <span class="date">19.04.2026</span>
-    <span class="time">11:00</span>
-    <span class="home-team">TSV Alpha</span>
-    <span class="guest-team">spielfrei</span>
-    <span class="competition">B-Junioren</span>
-  </div>
-</body></html>
-"""
-
-
-class TestSpielfreiFilteringInTableParser:
-    def test_spielfrei_row_excluded(self):
-        """Zeile mit 'spielfrei' als Gegner darf keinen ScrapedGame-Eintrag erzeugen."""
-        scraper = FussballDeScraper()
-        with patch.object(
-            scraper._session, "get", return_value=_mock_response(_SPIELFREI_TABLE_HTML)
-        ):
-            games = scraper.scrape_venue_games("VENUE001")
-
-        assert len(games) == 1
-        assert games[0].guest_team == "FC Muster"
-
-    def test_spielfrei_uppercase_excluded(self):
-        """'Spielfrei' in gemischter Groß-/Kleinschreibung wird ebenfalls gefiltert."""
-        html = _SPIELFREI_TABLE_HTML.replace("spielfrei", "Spielfrei")
-        scraper = FussballDeScraper()
-        with patch.object(
-            scraper._session, "get", return_value=_mock_response(html)
-        ):
-            games = scraper.scrape_venue_games("V1")
-
-        assert len(games) == 1
-
-
-class TestSpielfreiFilteringInFixtureParser:
-    def test_spielfrei_fixture_excluded(self):
-        """fixture-list-item mit 'spielfrei' als Gegner wird übersprungen."""
-        scraper = FussballDeScraper()
-        with patch.object(
-            scraper._session, "get", return_value=_mock_response(_SPIELFREI_FIXTURE_HTML)
-        ):
-            games = scraper.scrape_venue_games("V2")
-
-        assert len(games) == 1
-        assert games[0].guest_team == "VfB Beta"
-
-
-class TestSpielfreiFilteringInMatchplanJson:
-    def test_spielfrei_in_json_excluded(self):
-        """JSON-Matchplan-Einträge mit 'spielfrei' als Gegner werden übersprungen."""
-        matchplan = {
-            "matches": [
-                {
-                    "venue": {"id": "V1", "name": "Platz"},
-                    "date": "01.04.2026",
-                    "time": "14:00",
-                    "homeTeam": {"name": "SKV Hochberg"},
-                    "awayTeam": {"name": "FC Muster"},
-                    "competition": {"name": "Liga"},
-                },
-                {
-                    "venue": {"id": "V1", "name": "Platz"},
-                    "date": "08.04.2026",
-                    "time": "14:00",
-                    "homeTeam": {"name": "SKV Hochberg"},
-                    "awayTeam": {"name": "spielfrei"},
-                    "competition": {"name": "Liga"},
-                },
-            ]
-        }
-        scraper = FussballDeScraper()
-        mock = MagicMock()
-        mock.headers = {"content-type": "application/json"}
-        mock.json.return_value = matchplan
-        mock.raise_for_status.return_value = None
-
-        with patch.object(scraper._session, "get", return_value=mock):
-            games = scraper.scrape_club_matchplan("CLUB001")
-
-        assert len(games) == 1
-        assert games[0].guest_team == "FC Muster"
-
-    def test_spielfrei_as_home_team_excluded(self):
-        """JSON-Einträge mit 'spielfrei' als Heimteam werden ebenfalls übersprungen."""
-        matchplan = {
-            "matches": [
-                {
-                    "venue": {"id": "V1", "name": "Platz"},
-                    "date": "01.04.2026",
-                    "time": "14:00",
-                    "homeTeam": {"name": "spielfrei"},
-                    "awayTeam": {"name": "SKV Hochberg"},
-                    "competition": {"name": "Liga"},
-                },
-            ]
-        }
-        scraper = FussballDeScraper()
-        mock = MagicMock()
-        mock.headers = {"content-type": "application/json"}
-        mock.json.return_value = matchplan
-        mock.raise_for_status.return_value = None
-
-        with patch.object(scraper._session, "get", return_value=mock):
-            games = scraper.scrape_club_matchplan("CLUB001")
-
-        assert games == []
-
-
-class TestSpielfreiFilteringInMatchplanHtml:
-    def test_spielfrei_in_html_matchplan_excluded(self):
-        """HTML-Matchplan-Fragment mit 'spielfrei' als Gegner wird übersprungen."""
-        html = """
-        <div class="match-row" data-venue-id="V1">
-            <span class="date">01.04.2026</span>
-            <span class="time">14:00</span>
-            <span class="home-team">SKV Hochberg</span>
-            <span class="guest-team">FC Muster</span>
-            <span class="competition">Liga</span>
-            <span class="venue-name">Platz</span>
-        </div>
-        <div class="match-row" data-venue-id="V1">
-            <span class="date">08.04.2026</span>
-            <span class="time">14:00</span>
-            <span class="home-team">SKV Hochberg</span>
-            <span class="guest-team">spielfrei</span>
-            <span class="competition">Liga</span>
-            <span class="venue-name">Platz</span>
-        </div>
-        """
-        scraper = FussballDeScraper()
-        mock = MagicMock()
-        mock.headers = {"content-type": "text/html"}
-        mock.text = html
-        mock.raise_for_status.return_value = None
-
-        with patch.object(scraper._session, "get", return_value=mock):
-            games = scraper.scrape_club_matchplan("CLUB001")
-
-        assert len(games) == 1
-        assert games[0].guest_team == "FC Muster"
-
-    def test_cancelled_match_in_html_matchplan_excluded(self):
-        """HTML-Matchplan mit Status 'Absetzung' darf keinen Eintrag erzeugen."""
-        html = """
-        <table class="table table-striped table-full-width">
-          <tbody>
-            <tr class="odd row-competition hidden-small">
-              <td class="column-date"><span class="hidden-small inline">Sa, 18.04.26 |&nbsp;</span>17:15</td>
-              <td colspan="3" class="column-team"><a>A-Junioren | Bezirks-FS</a></td>
-              <td colspan="2"><a>FS | 555555555</a></td>
-            </tr>
-            <tr class="odd">
-              <td class="hidden-small"></td>
-              <td class="column-club"><div class="club-name">SGM SKV Hochberg/SGV Hochdorf/VfB Neckarrems</div></td>
-              <td class="column-colon">:</td>
-              <td class="column-club no-border"><div class="club-name">TSV 1899 Benningen II</div></td>
-              <td class="column-score">
-                <a href="https://www.fussball.de/spiel/sgm-skv-hochberg-sgv-hochdorf-vfb-neckarrems-tsv-1899-benningen-ii/-/spiel/0309A2QOSO000000VS5489BUVV4MIU4T"><span class="info-text">Absetzung</span></a>
-              </td>
-              <td class="column-detail">
-                <a href="https://www.fussball.de/spiel/sgm-skv-hochberg-sgv-hochdorf-vfb-neckarrems-tsv-1899-benningen-ii/-/spiel/0309A2QOSO000000VS5489BUVV4MIU4T">Zum Spiel</a>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        """
-        scraper = FussballDeScraper()
-        with patch.object(scraper._session, "get", return_value=_mock_response(html)):
-            games = scraper.scrape_club_matchplan("CLUB001")
-
-        assert games == []

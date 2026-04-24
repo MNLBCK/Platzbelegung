@@ -14,7 +14,6 @@ import logging
 import sys
 from pathlib import Path
 
-import requests
 from rich.console import Console
 
 from platzbelegung.config import load_config
@@ -33,9 +32,8 @@ logger = logging.getLogger(__name__)
 def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
     """Scrapt konfigurierte Sportstätten und speichert einen JSON-Snapshot.
 
-    Verwendet primär die club matchplan API (ajax.club.matchplan) und filtert
-    anschließend nach konfigurierten Sportstätten. Falls --venue-id angegeben
-    wird, wird der alte venue-basierte Scraper als Fallback verwendet.
+    Verwendet ``parse_matchplan.php`` (PHP) für das Parsing der fussball.de-HTML-Seiten.
+    PHP ist die einzige Source of Truth für die Spielplan-Normalisierung.
 
     Zusätzlich werden Trainingszeiten von konfigurierten Vereinswebseiten gescraped.
     """
@@ -44,88 +42,61 @@ def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
     from platzbelegung.training_scraper import ClubWebsiteScraper
     from platzbelegung.models import TrainingSession
 
-    # Check if user wants to use old venue-based scraping
-    use_venue_scraping = args.venue_id is not None and len(args.venue_id) > 0
-
     scraper = FussballDeScraper(app_cfg.scraper)
     all_games = []
 
-    if use_venue_scraping:
-        # Legacy mode: scrape individual venues (deprecated)
-        venue_ids: list[str] = args.venue_id
+    if not app_cfg.club_id:
         console.print(
-            "[yellow]Hinweis:[/yellow] Verwende venue-basiertes Scraping (deprecated). "
-            "Dies ist weniger stabil als club-basiertes Scraping."
+            "[red]Fehler:[/red] Keine club.id in config.yaml konfiguriert. "
+            "Bitte Vereins-ID eintragen."
         )
-        console.print()
+        return 1
 
-        for vid in venue_ids:
-            console.print(f"  Scraping venue [cyan]{vid}[/cyan] …")
-            try:
-                games = scraper.scrape_venue_games(vid)
-                console.print(f"    → {len(games)} Spiel(e) gefunden")
-                all_games.extend(games)
-            except requests.exceptions.RequestException as exc:
-                console.print(f"    [red]Netzwerkfehler:[/red] {exc}")
-                logger.debug("Scraping error for %s", vid, exc_info=True)
-            except Exception as exc:  # noqa: BLE001 – unexpected errors logged + shown
-                console.print(f"    [red]Fehler:[/red] {exc}")
-                logger.debug("Unexpected error scraping %s", vid, exc_info=True)
-    else:
-        # Primary mode: scrape club matchplan and filter by venues
-        if not app_cfg.club_id:
+    console.print(
+        f"Scraping club matchplan: [cyan]{app_cfg.club_name or app_cfg.club_id}[/cyan]"
+    )
+    console.print()
+
+    try:
+        all_games = scraper.scrape_club_matchplan(
+            club_id=app_cfg.club_id,
+        )
+        console.print(f"  → {len(all_games)} Spiel(e) vom Verein gefunden")
+
+        # --debug-raw-matchplan: Alle Rohdaten vor der Filterung anzeigen
+        if getattr(args, "debug_raw_matchplan", False):
+            console.print()
             console.print(
-                "[red]Fehler:[/red] Keine club.id in config.yaml konfiguriert. "
-                "Bitte Vereins-ID eintragen oder --venue-id verwenden."
+                f"[bold]Rohe Matchplan-Daten ({len(all_games)} Spiele vor Venues-Filterung):[/bold]"
             )
-            return 1
+            for g in all_games:
+                console.print(
+                    f"  [dim]{g.date} {g.time}[/dim]  "
+                    f"{g.home_team} vs {g.guest_team}  "
+                    f"[dim]@ {g.venue_name} ({g.venue_id})[/dim]"
+                )
+            console.print()
 
-        console.print(
-            f"Scraping club matchplan: [cyan]{app_cfg.club_name or app_cfg.club_id}[/cyan]"
+        # Filter by configured venues if any
+        if app_cfg.venues:
+            console.print(
+                f"  Filtere nach {len(app_cfg.venues)} Sportstätte(n) …"
+            )
+            all_games = filter_games_by_venue_configs(all_games, app_cfg.venues)
+            console.print(
+                f"  → {len(all_games)} Spiel(e) auf konfigurierten Plätzen"
+            )
+
+    except RuntimeError as exc:
+        console.print(f"[red]Fehler:[/red] {exc}")
+        logger.debug("Scraping error for club %s", app_cfg.club_id, exc_info=True)
+        return 1
+    except Exception as exc:  # noqa: BLE001 – unexpected errors logged + shown
+        console.print(f"[red]Fehler:[/red] {exc}")
+        logger.debug(
+            "Unexpected error scraping club %s", app_cfg.club_id, exc_info=True
         )
-        console.print()
-
-        try:
-            all_games = scraper.scrape_club_matchplan(
-                club_id=app_cfg.club_id,
-                season=app_cfg.season,
-            )
-            console.print(f"  → {len(all_games)} Spiel(e) vom Verein gefunden")
-
-            # --debug-raw-matchplan: Alle Rohdaten vor der Filterung anzeigen
-            if getattr(args, "debug_raw_matchplan", False):
-                console.print()
-                console.print(
-                    f"[bold]Rohe Matchplan-Daten ({len(all_games)} Spiele vor Venues-Filterung):[/bold]"
-                )
-                for g in all_games:
-                    console.print(
-                        f"  [dim]{g.date} {g.time}[/dim]  "
-                        f"{g.home_team} vs {g.guest_team}  "
-                        f"[dim]@ {g.venue_name} ({g.venue_id})[/dim]"
-                    )
-                console.print()
-
-            # Filter by configured venues if any
-            if app_cfg.venues:
-                console.print(
-                    f"  Filtere nach {len(app_cfg.venues)} Sportstätte(n) …"
-                )
-                all_games = filter_games_by_venue_configs(all_games, app_cfg.venues)
-                console.print(
-                    f"  → {len(all_games)} Spiel(e) auf konfigurierten Plätzen"
-                )
-
-        except requests.exceptions.RequestException as exc:
-            console.print(f"[red]Netzwerkfehler:[/red] {exc}")
-            logger.debug("Scraping error for club %s", app_cfg.club_id, exc_info=True)
-            return 1
-        except Exception as exc:  # noqa: BLE001 – unexpected errors logged + shown
-            console.print(f"[red]Fehler:[/red] {exc}")
-            logger.debug(
-                "Unexpected error scraping club %s", app_cfg.club_id, exc_info=True
-            )
-            return 1
+        return 1
 
     # Trainingszeiten von Vereinswebseiten scrapen
     all_training: list[TrainingSession] = []
@@ -152,10 +123,7 @@ def _cmd_scrape(args: argparse.Namespace, app_cfg, console: Console) -> int:
                 )
 
     # Collect venue IDs for metadata
-    if use_venue_scraping:
-        venue_ids_meta = args.venue_id
-    else:
-        venue_ids_meta = [v.id for v in app_cfg.venues] if app_cfg.venues else []
+    venue_ids_meta = [v.id for v in app_cfg.venues] if app_cfg.venues else []
 
     config_meta = {
         "club_id": app_cfg.club_id,
@@ -306,13 +274,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # scrape
     p_scrape = sub.add_parser(
         "scrape",
-        help="Vereins-Matchplan scrapen und Snapshot speichern (primär via ajax.club.matchplan)",
-    )
-    p_scrape.add_argument(
-        "--venue-id",
-        metavar="ID",
-        nargs="+",
-        help="[DEPRECATED] Sportstätten-ID(s) direkt scrapen (verwendet alten HTML-Parser)",
+        help="Vereins-Matchplan scrapen und Snapshot speichern (via parse_matchplan.php)",
     )
     p_scrape.add_argument(
         "--debug-raw-matchplan",
