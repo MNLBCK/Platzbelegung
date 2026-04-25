@@ -1224,9 +1224,17 @@ function renderClubSearchResults(clubs) {
     '</button>'
   ).join('');
   resultsEl.querySelectorAll('[data-club-id]').forEach(button => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const club = clubs.find(e => e.id === button.dataset.clubId);
-      if (club) selectClub(club);
+      if (!club) return;
+      if (!state.club) {
+        selectClub(club);
+        return;
+      }
+      await addAdditionalClub(club);
+      $('club-search-input').value = '';
+      resultsEl.innerHTML = '';
+      showEl(resultsEl, false);
     });
   });
   showEl(resultsEl, true);
@@ -1631,7 +1639,7 @@ function renderSGSuggestion(clubs) {
       (club.logoUrl ? '<img class="sg-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="" loading="lazy">' : '') +
       '<span class="sg-club-name">' + escapeHtml(club.name) + '</span>' +
       (club.location ? '<span class="sg-club-loc">' + escapeHtml(club.location) + '</span>' : '') +
-      '<button class="btn btn-sm sg-add-btn" type="button" data-club-id="' + escapeHtml(club.id) + '">Hinzufügen</button>' +
+      '<button class="btn btn-sm sg-add-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="Verein hinzufügen" aria-label="Verein hinzufügen">+</button>' +
     '</div>'
   ).join('');
   el.innerHTML =

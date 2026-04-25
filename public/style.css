@@ -957,7 +957,14 @@ main {
 .sg-add-btn {
   flex-shrink: 0;
   font-size: 0.78rem !important;
-  padding: 0.22rem 0.6rem !important;
+  width: 1.7rem;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 .sg-dismiss-btn {
   position: absolute;
