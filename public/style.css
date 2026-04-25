@@ -463,6 +463,20 @@ main {
   display: flex;
   align-items: center;
   gap: 0.8rem;
+  justify-content: space-between;
+}
+.club-search-select-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  cursor: pointer;
 }
 .club-search-logo-wrap {
   width: 44px;
@@ -487,6 +501,19 @@ main {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+.club-search-add-btn {
+  flex-shrink: 0;
+  width: 1.7rem;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 /* Current club display with logo */

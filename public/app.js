@@ -1211,19 +1211,22 @@ function renderClubSearchResults(clubs) {
     return;
   }
   resultsEl.innerHTML = clubs.map(club =>
-    '<button class="search-result-item club-search-item" type="button" data-club-id="' + escapeHtml(club.id) + '">' +
-    '<span class="club-search-logo-wrap">' +
-    (club.logoUrl
-      ? '<img class="club-search-logo" src="' + escapeHtml(club.logoUrl) + '" alt="">'
-      : '<span class="club-search-logo club-search-logo-fallback"></span>') +
-    '</span>' +
-    '<span class="club-search-copy">' +
-    '<span class="search-result-name">' + escapeHtml(club.name) + '</span>' +
-    '<span class="search-result-loc">' + escapeHtml(club.location || club.id) + '</span>' +
-    '</span>' +
-    '</button>'
+    '<div class="search-result-item club-search-item" data-club-id="' + escapeHtml(club.id) + '">' +
+      '<button class="club-search-select-btn" type="button" data-club-id="' + escapeHtml(club.id) + '">' +
+        '<span class="club-search-logo-wrap">' +
+        (club.logoUrl
+          ? '<img class="club-search-logo" src="' + escapeHtml(club.logoUrl) + '" alt="">'
+          : '<span class="club-search-logo club-search-logo-fallback"></span>') +
+        '</span>' +
+        '<span class="club-search-copy">' +
+          '<span class="search-result-name">' + escapeHtml(club.name) + '</span>' +
+          '<span class="search-result-loc">' + escapeHtml(club.location || club.id) + '</span>' +
+        '</span>' +
+      '</button>' +
+      '<button class="btn btn-sm club-search-add-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="Verein hinzufügen" aria-label="Verein hinzufügen">+</button>' +
+    '</div>'
   ).join('');
-  resultsEl.querySelectorAll('[data-club-id]').forEach(button => {
+  resultsEl.querySelectorAll('.club-search-select-btn, .club-search-add-btn').forEach(button => {
     button.addEventListener('click', async () => {
       const club = clubs.find(e => e.id === button.dataset.clubId);
       if (!club) return;
@@ -1243,7 +1246,16 @@ function renderClubSearchResults(clubs) {
 async function doClubSearch(query) {
   const directClubId = extractClubId(query);
   if (directClubId) {
-    selectClub({ id: directClubId, name: query.trim() });
+    const directClub = { id: directClubId, name: query.trim() };
+    if (!state.club) {
+      selectClub(directClub);
+    } else {
+      await addAdditionalClub(directClub);
+      $('club-search-input').value = '';
+      const resultsEl = $('club-search-results');
+      resultsEl.innerHTML = '';
+      showEl(resultsEl, false);
+    }
     return;
   }
   const resultsEl = $('club-search-results');
