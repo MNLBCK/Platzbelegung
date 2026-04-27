@@ -2232,6 +2232,14 @@ function bindEvents() {
       renderCompactClubSelection();
     });
   }
+  const homeBtn = $('header-home-btn');
+  if (homeBtn) {
+    homeBtn.addEventListener('click', () => {
+      clearClub();
+      showError('');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
 
   $('club-search-btn').addEventListener('click', () => {
     const query = $('club-search-input').value.trim();
