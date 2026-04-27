@@ -284,6 +284,19 @@ header h1 {
   align-items: center;
   gap: 0.75rem;
 }
+.brand-home-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.brand-home-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
 .brand-mark {
   width: 58px;
   height: 58px;
@@ -463,6 +476,20 @@ main {
   display: flex;
   align-items: center;
   gap: 0.8rem;
+  justify-content: space-between;
+}
+.club-search-select-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  cursor: pointer;
 }
 .club-search-logo-wrap {
   width: 44px;
@@ -487,6 +514,19 @@ main {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+.club-search-add-btn {
+  flex-shrink: 0;
+  width: 1.7rem;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 /* Current club display with logo */
@@ -957,7 +997,14 @@ main {
 .sg-add-btn {
   flex-shrink: 0;
   font-size: 0.78rem !important;
-  padding: 0.22rem 0.6rem !important;
+  width: 1.7rem;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 .sg-dismiss-btn {
   position: absolute;

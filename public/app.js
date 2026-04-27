@@ -1211,22 +1211,33 @@ function renderClubSearchResults(clubs) {
     return;
   }
   resultsEl.innerHTML = clubs.map(club =>
-    '<button class="search-result-item club-search-item" type="button" data-club-id="' + escapeHtml(club.id) + '">' +
-    '<span class="club-search-logo-wrap">' +
-    (club.logoUrl
-      ? '<img class="club-search-logo" src="' + escapeHtml(club.logoUrl) + '" alt="">'
-      : '<span class="club-search-logo club-search-logo-fallback"></span>') +
-    '</span>' +
-    '<span class="club-search-copy">' +
-    '<span class="search-result-name">' + escapeHtml(club.name) + '</span>' +
-    '<span class="search-result-loc">' + escapeHtml(club.location || club.id) + '</span>' +
-    '</span>' +
-    '</button>'
+    '<div class="search-result-item club-search-item" data-club-id="' + escapeHtml(club.id) + '">' +
+      '<button class="club-search-select-btn" type="button" data-club-id="' + escapeHtml(club.id) + '">' +
+        '<span class="club-search-logo-wrap">' +
+        (club.logoUrl
+          ? '<img class="club-search-logo" src="' + escapeHtml(club.logoUrl) + '" alt="">'
+          : '<span class="club-search-logo club-search-logo-fallback"></span>') +
+        '</span>' +
+        '<span class="club-search-copy">' +
+          '<span class="search-result-name">' + escapeHtml(club.name) + '</span>' +
+          '<span class="search-result-loc">' + escapeHtml(club.location || club.id) + '</span>' +
+        '</span>' +
+      '</button>' +
+      '<button class="btn btn-sm club-search-add-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="Verein hinzufügen" aria-label="Verein hinzufügen">+</button>' +
+    '</div>'
   ).join('');
-  resultsEl.querySelectorAll('[data-club-id]').forEach(button => {
-    button.addEventListener('click', () => {
+  resultsEl.querySelectorAll('.club-search-select-btn, .club-search-add-btn').forEach(button => {
+    button.addEventListener('click', async () => {
       const club = clubs.find(e => e.id === button.dataset.clubId);
-      if (club) selectClub(club);
+      if (!club) return;
+      if (!state.club) {
+        selectClub(club);
+        return;
+      }
+      await addAdditionalClub(club);
+      $('club-search-input').value = '';
+      resultsEl.innerHTML = '';
+      showEl(resultsEl, false);
     });
   });
   showEl(resultsEl, true);
@@ -1235,7 +1246,16 @@ function renderClubSearchResults(clubs) {
 async function doClubSearch(query) {
   const directClubId = extractClubId(query);
   if (directClubId) {
-    selectClub({ id: directClubId, name: query.trim() });
+    const directClub = { id: directClubId, name: query.trim() };
+    if (!state.club) {
+      selectClub(directClub);
+    } else {
+      await addAdditionalClub(directClub);
+      $('club-search-input').value = '';
+      const resultsEl = $('club-search-results');
+      resultsEl.innerHTML = '';
+      showEl(resultsEl, false);
+    }
     return;
   }
   const resultsEl = $('club-search-results');
@@ -1631,7 +1651,7 @@ function renderSGSuggestion(clubs) {
       (club.logoUrl ? '<img class="sg-club-logo" src="' + escapeHtml(club.logoUrl) + '" alt="" loading="lazy">' : '') +
       '<span class="sg-club-name">' + escapeHtml(club.name) + '</span>' +
       (club.location ? '<span class="sg-club-loc">' + escapeHtml(club.location) + '</span>' : '') +
-      '<button class="btn btn-sm sg-add-btn" type="button" data-club-id="' + escapeHtml(club.id) + '">Hinzufügen</button>' +
+      '<button class="btn btn-sm sg-add-btn" type="button" data-club-id="' + escapeHtml(club.id) + '" title="Verein hinzufügen" aria-label="Verein hinzufügen">+</button>' +
     '</div>'
   ).join('');
   el.innerHTML =
@@ -2210,6 +2230,14 @@ function bindEvents() {
     changeBtn.addEventListener('click', () => {
       state.compactClubSelection = false;
       renderCompactClubSelection();
+    });
+  }
+  const homeBtn = $('header-home-btn');
+  if (homeBtn) {
+    homeBtn.addEventListener('click', () => {
+      clearClub();
+      showError('');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
 
