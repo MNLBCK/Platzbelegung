@@ -233,6 +233,13 @@ Das Skript aktualisiert dabei:
 - `package-lock.json`
 - statische Fallback-Version in `public/index.html`
 
+Versionen und Build-Metadaten folgen dabei einer klaren Quelle:
+
+- `VERSION` ist die führende Release-Quelle (Tag-Format, z. B. `v0.2.2`).
+- `pyproject.toml` und `package.json` leiten daraus die Paketversion ohne `v` ab.
+- `BUILD_META.json` wird beim Deploy aus `VERSION` plus Git-Status abgeleitet (`displayVersion`, `releaseVersion`, Commit-/Datei-Deltas).
+- `backend.php` liest bevorzugt `BUILD_META.json` und fällt ohne Build-Metadaten auf `VERSION` zurück.
+
 #### Empfohlene Struktur auf dem Server
 
 Beispiel für eine Subdomain wie `platzbelegung.sghochx.de`:
