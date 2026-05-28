@@ -1,0 +1,201 @@
+:root {
+  --bg: #f4f8f5;
+  --surface: #ffffff;
+  --text: #12311f;
+  --muted: #4a6658;
+  --primary: #0a7a42;
+  --primary-dark: #07592f;
+  --accent: #e6f4ec;
+  --border: #cfe3d7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", "Roboto", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+a {
+  color: var(--primary-dark);
+}
+
+.container {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 1.2rem;
+}
+
+.hero {
+  background: linear-gradient(135deg, #0a7a42, #0d5c36);
+  color: #fff;
+  border-radius: 18px;
+  padding: 2rem;
+  margin: 1rem 0 1.2rem;
+}
+
+.hero h1 {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+}
+
+.hero p {
+  margin: 0;
+  max-width: 56ch;
+}
+
+.actions {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.btn {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.65rem 1.05rem;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background: #fff;
+  color: var(--primary-dark);
+}
+
+.btn-secondary {
+  border: 1px solid #fff;
+  color: #fff;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  margin: 0 0 1rem;
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.feature {
+  background: var(--accent);
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.feature h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+
+.feature p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+ol {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+li + li {
+  margin-top: 0.4rem;
+}
+
+.flyer {
+  max-width: 920px;
+}
+
+.flyer-head {
+  text-align: center;
+  background: var(--accent);
+  border: 2px solid var(--primary);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.flyer-title {
+  margin: 0;
+  font-size: clamp(1.8rem, 6vw, 3.1rem);
+}
+
+.flyer-subtitle {
+  margin: 0.3rem 0 0;
+  font-size: 1.1rem;
+  color: var(--muted);
+}
+
+.flyer-claim {
+  text-align: center;
+  margin: 1rem 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.flyer-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.flyer-box {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.9rem;
+}
+
+.flyer-box h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.flyer-footer {
+  margin-top: 0.9rem;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .flyer-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .container {
+    max-width: none;
+    padding: 0;
+  }
+
+  .hero,
+  .actions {
+    display: none;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
